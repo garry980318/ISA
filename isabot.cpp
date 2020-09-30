@@ -2,11 +2,7 @@
  * @author Radoslav Grenčík, xgrenc00@stud.fit.vutbr.cz
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <string.h>
-#include <getopt.h>
+#include "isabot.h"
 
 void errExit(int errnum, const char *err)
 {
@@ -73,8 +69,10 @@ int main(int argc, char **argv)
     if (flag_access_token == false)
         errExit(EXIT_FAILURE, "bad option - option '-t <access_token>' is missing.");
 
+#ifdef DEBUG
     printf("Verbose: %s\n", flag_verbose ? "true" : "false");
     printf("Access token: %s\n", access_token);
+#endif
 
     return EXIT_SUCCESS;
 }
