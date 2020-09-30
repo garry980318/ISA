@@ -8,29 +8,27 @@
 #include <string.h>
 #include <getopt.h>
 
-void errExit (int errno, const char *err)
+void errExit(int errnum, const char *err)
 {
     fprintf(stderr, "ERROR: %s\nTry 'isabot -h|--help' for more information.\n", err);
-    exit(errno);
+    exit(errnum);
 }
 
 int main(int argc, char **argv)
 {
     bool flag_verbose = false;
     bool flag_access_token = false;
-    char *access_token = NULL;
+    char access_token[100];
 
     int opt;
 
     while (true)
     {
         int option_index = 0;
-        static struct option long_options[] =
-        {
-            {"help",    no_argument, NULL, 'h'},
+        static struct option long_options[] = {
+            {"help", no_argument, NULL, 'h'},
             {"verbose", no_argument, NULL, 'v'},
-            {0,         0,           0,    0  }
-        };
+            {0, 0, 0, 0}};
 
         opt = getopt_long(argc, argv, "hvt:", long_options, &option_index);
         if (opt == -1)
@@ -38,28 +36,28 @@ int main(int argc, char **argv)
 
         switch (opt)
         {
-            case 'h':
-                printf("HELP WILL BE DISPLAYED HERE...\n");
-                exit(EXIT_SUCCESS);
-                break;
-            case 'v':
-                if (flag_verbose == false)
-                    flag_verbose = true;
-                else
-                    errExit(EXIT_FAILURE, "bad option - option '-v|--verbose' declared more than once.");
-                break;
-            case 't':
-                if (flag_access_token == false)
-                {
-                    flag_access_token = true;
-                    access_token = optarg;
-                }
-                else
-                    errExit(EXIT_FAILURE, "bad option - option '-t <access_token>' declared more than once.");
-                break;
-            case '?':
-                errExit(EXIT_FAILURE, "...");
-                break;
+        case 'h':
+            printf("HELP WILL BE DISPLAYED HERE...\n");
+            exit(EXIT_SUCCESS);
+            break;
+        case 'v':
+            if (flag_verbose == false)
+                flag_verbose = true;
+            else
+                errExit(EXIT_FAILURE, "bad option - option '-v|--verbose' declared more than once.");
+            break;
+        case 't':
+            if (flag_access_token == false)
+            {
+                flag_access_token = true;
+                strcpy(access_token, optarg);
+            }
+            else
+                errExit(EXIT_FAILURE, "bad option - option '-t <access_token>' declared more than once.");
+            break;
+        case '?':
+            errExit(EXIT_FAILURE, "...");
+            break;
         }
     }
 
