@@ -5,7 +5,7 @@ LOGIN = xgrenc00
 CC = g++
 CFLAGS = -Wall -Werror -pedantic -lm
 
-HEADER = isabot.h
+HEADER = isabot.hpp
 SRC = isabot.cpp
 BIN = isabot
 DOC = README manual.pdf
