@@ -21,7 +21,7 @@ int main(int argc, char** argv)
     /***** PARSING OF THE ARGUMENTS *****/
     bool flag_verbose = false;
     bool flag_access_token = false;
-    char access_token[100];
+    char access_token[512];
 
     int opt;
 
@@ -98,15 +98,16 @@ int main(int argc, char** argv)
     memset(&server, 0, sizeof(server)); // erase the server structure
     memset(&local, 0, sizeof(local)); // erase the local address structure
 
-    struct hostent* server_ip;
-    server_ip = gethostbyname("discord.com");
-    if (server_ip == NULL)
+    struct hostent* he;
+    he = gethostbyname("discord.com");
+    if (he == NULL)
         errExit(EXIT_FAILURE, "IP not found");
-    printf("IP ADDRESS: %s\n", inet_ntoa(*((struct in_addr*)server_ip->h_addr_list[0])));
 
-    server.sin_addr.s_addr = inet_addr(inet_ntoa(*((struct in_addr*)server_ip->h_addr_list[0]))); // set the server address
+    const char* server_ip = inet_ntoa(*((struct in_addr*)he->h_addr_list[0]));
+
+    server.sin_addr.s_addr = inet_addr(server_ip); // set the server address
     server.sin_family = AF_INET;
-    server.sin_port = htons(443); // set the server port (network byte order)
+    server.sin_port = htons(HTTPS); // set the server port (network byte order)
 
     // connect to the remote server
     // client port and IP address are assigned automatically by the operating system
@@ -120,7 +121,9 @@ int main(int argc, char** argv)
 
     printf("Client successfully connected from %s, port %d (%d) to %s, port %d (%d)\n", inet_ntoa(local.sin_addr), ntohs(local.sin_port), local.sin_port, inet_ntoa(server.sin_addr), ntohs(server.sin_port), server.sin_port);
 
-    strcpy(buffer, "GET /api/v6/channels/760873107513933864/messages HTTP/1.1\r\nHost: discord.com\r\nAuthorization: Bot NzYwNjE5OTA0NDE5NzU4MDgy.X3OsfA.6XCY4sabX63d8hmm5s0vgElHA8o\r\n\r\n");
+    strcpy(buffer, "GET /api/v6/channels/760873107513933864/messages HTTP/1.1\r\nHost: discord.com\r\nAuthorization: Bot ");
+    strcat(buffer, access_token);
+    strcat(buffer, "\r\n\r\n");
 
     i = write(sock, buffer, strlen(buffer));
     if (i == -1)

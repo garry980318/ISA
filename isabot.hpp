@@ -21,6 +21,7 @@
 #define BAD_OPTIONS 2
 
 #define BUFFER 1024
+#define HTTPS 443
 
 /**
  * @brief
