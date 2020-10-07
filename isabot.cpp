@@ -16,14 +16,10 @@ void errExit(int errnum, const char* err)
     exit(errnum);
 }
 
-int main(int argc, char** argv)
+void parseOpt(int argc, char** argv, char* access_token)
 {
-    /***** PARSING OF THE ARGUMENTS *****/
-    bool flag_verbose = false;
-    bool flag_access_token = false;
-    char access_token[512];
-
     int opt;
+    bool flag_access_token = false;
 
     while (true) {
         int option_index = 0;
@@ -71,6 +67,13 @@ int main(int argc, char** argv)
 
     if (flag_access_token == false)
         errExit(BAD_OPTIONS, "bad option - option '-t <access_token>' is missing");
+}
+
+int main(int argc, char** argv)
+{
+    /***** PARSING OF THE ARGUMENTS *****/
+    char access_token[512];
+    parseOpt(argc, argv, access_token);
 
 #ifdef DEBUG
     printf("Verbose: %s\n", flag_verbose ? "true" : "false");
@@ -78,7 +81,6 @@ int main(int argc, char** argv)
 #endif
 
     /***** CREATING THE SOCKET *****/
-
     int sock;
     // int msg_size;
     int i;
@@ -121,9 +123,11 @@ int main(int argc, char** argv)
 
     printf("Client successfully connected from %s, port %d (%d) to %s, port %d (%d)\n", inet_ntoa(local.sin_addr), ntohs(local.sin_port), local.sin_port, inet_ntoa(server.sin_addr), ntohs(server.sin_port), server.sin_port);
 
-    strcpy(buffer, "GET /api/v6/channels/760873107513933864/messages HTTP/1.1\r\nHost: discord.com\r\nAuthorization: Bot ");
-    strcat(buffer, access_token);
-    strcat(buffer, "\r\n\r\n");
+    // strcpy(buffer, "GET /api/v6/channels/760873107513933864/messages HTTP/1.1\r\nHost: discord.com\r\nAuthorization: Bot ");
+    // strcat(buffer, access_token);
+    // strcat(buffer, "\r\n\r\n");
+
+    strcpy(buffer, "GET /users/@me/guilds\r\n\r\n");
 
     i = write(sock, buffer, strlen(buffer));
     if (i == -1)

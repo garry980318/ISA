@@ -23,10 +23,17 @@
 #define BUFFER 1024
 #define HTTPS 443
 
+bool flag_verbose = false;
+
 /**
  * @brief
  */
 void errExit(int errnum, const char* err);
+
+/**
+ * @brief
+ */
+void parseOpt(int argc, char** argv, char* access_token);
 
 #endif
 /*** End of file isabot.hpp ***/
