@@ -82,16 +82,22 @@ int OpenConnection(const char* hostname, int port)
     timeout.tv_sec = 1;
     timeout.tv_usec = 0;
 
-    if (setsockopt (sock, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0)
+    if (setsockopt (sock, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
+        close(sock);
         ErrExit(EXIT_FAILURE, "setsockopt failed");
+    }
 
-    if (setsockopt (sock, SOL_SOCKET, SO_SNDTIMEO, (char *)&timeout, sizeof(timeout)) < 0)
+    if (setsockopt (sock, SOL_SOCKET, SO_SNDTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
+        close(sock);
         ErrExit(EXIT_FAILURE, "setsockopt failed");
+    }
 
     struct hostent* he;
     he = gethostbyname(hostname);
-    if (he == NULL)
+    if (he == NULL) {
+        close(sock);
         ErrExit(EXIT_FAILURE, "IP not found");
+    }
 
     server.sin_addr.s_addr = inet_addr(inet_ntoa(*((struct in_addr*)he->h_addr_list[0])));
     server.sin_family = AF_INET;
@@ -120,6 +126,25 @@ SSL_CTX* InitCTX()
     return ctx;
 }
 
+vector<string> split(string s, string delimiter){
+    vector<string> list;
+    size_t pos = 0;
+    string token;
+    while ((pos = s.find(delimiter)) != string::npos) {
+        token = s.substr(0, pos);
+        list.push_back(token);
+        s.erase(0, pos + delimiter.length());
+    }
+    list.push_back(s);
+    return list;
+}
+
+void PrintVector(vector<string> const &input)
+{
+    for (unsigned int i = 0; i < input.size(); i++)
+        cout << i << ".) " << input.at(i) << endl << endl;
+}
+
 int main(int argc, char** argv)
 {
     /***** PARSING OF THE ARGUMENTS *****/
@@ -140,8 +165,12 @@ int main(int argc, char** argv)
     sock = OpenConnection("discord.com", HTTPS);
     ssl = SSL_new(ctx);      /* create new SSL connection state */
     SSL_set_fd(ssl, sock);    /* attach the socket descriptor */
-    if (SSL_connect(ssl) == -1)   /* perform the connection */
+    if (SSL_connect(ssl) == -1) {   /* perform the connection */
+        close(sock);
+        SSL_CTX_free(ctx);
         ERR_print_errors_fp(stderr);
+        ErrExit(EXIT_FAILURE, "SSL connection failed");
+    }
     else {
         printf("* Connected with %s encryption\n", SSL_get_cipher(ssl));
 
@@ -173,8 +202,12 @@ int main(int argc, char** argv)
         string guild_id;
 
         if (regex_search(received, sm_id_whole, r_id_whole)) {
-            if (sm_id_whole.size() < 1 || sm_id_whole.size() > 2)
+            if (sm_id_whole.size() < 1 || sm_id_whole.size() > 2) {
+                SSL_free(ssl);
+                close(sock);
+                SSL_CTX_free(ctx);
                 ErrExit(EXIT_FAILURE, "BOT must be member of exactly one Discord server");
+            }
             whole_id += sm_id_whole[0];
             if (regex_search(whole_id, sm_id_num, r_id_num))
                 guild_id += sm_id_num[0];
@@ -201,24 +234,73 @@ int main(int argc, char** argv)
         }
 
         const regex r_isa_bot_channel("(\"id\": \"[0-9]+\", \"last_message_id\": (null|\"[0-9]+\"), \"type\": [0-9]+, \"name\": \"isa-bot\")");
+        const regex r_whole_last_message_id("(\"last_message_id\": (null|\"[0-9]+\"))");
+        const regex r_last_message_id("(null|[0-9]+)");
         smatch sm_isa_bot_channel;
         smatch sm_isa_bot_whole_channel_id;
         smatch sm_isa_bot_channel_id;
+        smatch sm_whole_last_message_id;
+        smatch sm_last_message_id;
         string channel;
         string whole_channel_id;
         string channel_id;
+        string whole_last_message_id;
+        string last_message_id;
 
         if (regex_search(received, sm_isa_bot_channel, r_isa_bot_channel)) {
-            if (sm_isa_bot_channel.size() < 1 || sm_isa_bot_channel.size() > 3)
+            if (sm_isa_bot_channel.size() < 1 || sm_isa_bot_channel.size() > 3) {
+                SSL_free(ssl);
+                close(sock);
+                SSL_CTX_free(ctx);
                 ErrExit(EXIT_FAILURE, "there is wrong number of \"isa-bot\" channels in specified Discord server");
+            }
             channel += sm_isa_bot_channel[0];
             if (regex_search(channel, sm_isa_bot_whole_channel_id, r_id_whole))
                 whole_channel_id += sm_isa_bot_whole_channel_id[0];
             if (regex_search(whole_channel_id, sm_isa_bot_channel_id, r_id_num))
                 channel_id += sm_isa_bot_channel_id[0];
+
+            if (regex_search(channel, sm_whole_last_message_id, r_whole_last_message_id))
+                whole_last_message_id += sm_whole_last_message_id[0];
+            if (regex_search(whole_last_message_id, sm_last_message_id, r_last_message_id))
+                last_message_id += sm_last_message_id[0];
         }
 
-        cout << channel_id << endl;
+        // cout << channel_id << endl;
+
+        memset(buffer_request, 0, sizeof(buffer_request));
+        memset(buffer_answer, 0, sizeof(buffer_answer));
+
+        strcpy(buffer_request, "GET /api/v6/channels/");
+        strcat(buffer_request, channel_id.c_str());
+        strcat(buffer_request, "/messages HTTP/1.1\r\nHost: discord.com\r\nAuthorization: Bot ");
+        strcat(buffer_request, access_token);
+        strcat(buffer_request, "\r\nafter: ");
+        strcat(buffer_request, last_message_id.c_str());
+        strcat(buffer_request, "\r\n\r\n");
+
+        SSL_write(ssl, buffer_request, strlen(buffer_request));   /* encrypt & send message */
+
+        received.clear();
+        printf("\n* Received:\n\n");
+        bytes = 0;
+        while(bytes != -1) {
+            bytes = SSL_read(ssl, buffer_answer, sizeof(buffer_answer) - 1); /* get reply & decrypt */
+            received += buffer_answer;
+            memset(buffer_answer, 0, sizeof(buffer_answer));
+        }
+
+        cout << received << endl;
+
+        const regex r_messages("(\n\\[.*\\])");
+        smatch sm_messages;
+        string json_messages;
+
+        if (regex_search(received, sm_messages, r_messages)) {
+            json_messages += sm_messages[0];
+            vector<string> messages = split(json_messages, "}, {");
+            PrintVector(messages);
+        }
 
         SSL_free(ssl);        /* release connection state */
         printf("\n* Connection released...\n");
