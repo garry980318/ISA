@@ -19,6 +19,11 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <iostream>
+#include <string>
+#include <regex>
+using namespace std;
+
 #define BAD_OPTIONS 99
 
 #define BUFFER 1024

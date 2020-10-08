@@ -3,7 +3,7 @@
 LOGIN = xgrenc00
 
 CC = g++
-CFLAGS = -Wall -Werror -pedantic
+CFLAGS = -std=c++11 -Wall -Werror -pedantic
 LDFLAGS = -L/usr/local/ssl/lib
 LDLIBS = -lssl -lcrypto
 

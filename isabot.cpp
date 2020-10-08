@@ -156,13 +156,69 @@ int main(int argc, char** argv)
 
         SSL_write(ssl, buffer_request, strlen(buffer_request));   /* encrypt & send message */
 
+        string received;
         printf("\n* Received:\n\n");
         int bytes = 0;
         while(bytes != -1) {
             bytes = SSL_read(ssl, buffer_answer, sizeof(buffer_answer) - 1); /* get reply & decrypt */
-            printf("%s", buffer_answer);
+            received += buffer_answer;
             memset(buffer_answer, 0, sizeof(buffer_answer));
         }
+
+        const regex r_id_whole("(\"id\": \"[0-9]+\")");
+        const regex r_id_num("([0-9]+)");
+        smatch sm_id_whole;
+        smatch sm_id_num;
+        string whole_id;
+        string guild_id;
+
+        if (regex_search(received, sm_id_whole, r_id_whole)) {
+            if (sm_id_whole.size() < 1 || sm_id_whole.size() > 2)
+                ErrExit(EXIT_FAILURE, "BOT must be member of exactly one Discord server");
+            whole_id += sm_id_whole[0];
+            if (regex_search(whole_id, sm_id_num, r_id_num))
+                guild_id += sm_id_num[0];
+        }
+
+        memset(buffer_request, 0, sizeof(buffer_request));
+        memset(buffer_answer, 0, sizeof(buffer_answer));
+
+        strcpy(buffer_request, "GET /api/v6/guilds/");
+        strcat(buffer_request, guild_id.c_str());
+        strcat(buffer_request, "/channels HTTP/1.1\r\nHost: discord.com\r\nAuthorization: Bot ");
+        strcat(buffer_request, access_token);
+        strcat(buffer_request, "\r\n\r\n");
+
+        SSL_write(ssl, buffer_request, strlen(buffer_request));   /* encrypt & send message */
+
+        received.clear();
+        printf("\n* Received:\n\n");
+        bytes = 0;
+        while(bytes != -1) {
+            bytes = SSL_read(ssl, buffer_answer, sizeof(buffer_answer) - 1); /* get reply & decrypt */
+            received += buffer_answer;
+            memset(buffer_answer, 0, sizeof(buffer_answer));
+        }
+
+        const regex r_isa_bot_channel("(\"id\": \"[0-9]+\", \"last_message_id\": (null|\"[0-9]+\"), \"type\": [0-9]+, \"name\": \"isa-bot\")");
+        smatch sm_isa_bot_channel;
+        smatch sm_isa_bot_whole_channel_id;
+        smatch sm_isa_bot_channel_id;
+        string channel;
+        string whole_channel_id;
+        string channel_id;
+
+        if (regex_search(received, sm_isa_bot_channel, r_isa_bot_channel)) {
+            if (sm_isa_bot_channel.size() < 1 || sm_isa_bot_channel.size() > 3)
+                ErrExit(EXIT_FAILURE, "there is wrong number of \"isa-bot\" channels in specified Discord server");
+            channel += sm_isa_bot_channel[0];
+            if (regex_search(channel, sm_isa_bot_whole_channel_id, r_id_whole))
+                whole_channel_id += sm_isa_bot_whole_channel_id[0];
+            if (regex_search(whole_channel_id, sm_isa_bot_channel_id, r_id_num))
+                channel_id += sm_isa_bot_channel_id[0];
+        }
+
+        cout << channel_id << endl;
 
         SSL_free(ssl);        /* release connection state */
         printf("\n* Connection released...\n");
