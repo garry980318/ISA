@@ -10,6 +10,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <openssl/ssl.h>
+#include <openssl/err.h>
 #include <pwd.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -18,7 +19,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#define BAD_OPTIONS 2
+#define BAD_OPTIONS 99
 
 #define BUFFER 1024
 #define HTTPS 443
@@ -28,12 +29,22 @@ bool flag_verbose = false;
 /**
  * @brief
  */
-void errExit(int errnum, const char* err);
+void ErrExit(int errnum, const char* err);
 
 /**
  * @brief
  */
-void parseOpt(int argc, char** argv, char* access_token);
+void ParseOpt(int argc, char** argv, char* access_token);
+
+/**
+ * @brief
+ */
+int OpenConnection(const char* hostname, int port);
+
+/**
+ * @brief
+ */
+SSL_CTX* InitCTX();
 
 #endif
 /*** End of file isabot.hpp ***/

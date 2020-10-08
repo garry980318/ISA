@@ -3,7 +3,9 @@
 LOGIN = xgrenc00
 
 CC = g++
-CFLAGS = -Wall -Werror -pedantic -lm
+CFLAGS = -Wall -Werror -pedantic
+LDFLAGS = -L/usr/local/ssl/lib
+LDLIBS = -lssl -lcrypto
 
 HEADER = isabot.hpp
 SRC = isabot.cpp
@@ -12,10 +14,10 @@ DOC = README manual.pdf
 PROJECT_FILES = $(SRC) $(HEADER) Makefile $(DOC)
 
 $(BIN): $(SRC)
-	$(CC) $(CFLAGS) $(SRC) -o $(BIN)
+	$(CC) $(SRC) -o $(BIN) $(CFLAGS) $(LDFLAGS) $(LDLIBS)
 
 debug: $(SRC)
-	$(CC) $(CFLAGS) -g -DDEBUG=1 $(SRC) -o $(BIN)
+	$(CC) $(SRC) -o $(BIN) $(CFLAGS) -g -DDEBUG=1 $(LDFLAGS) $(LDLIBS)
 
 clean:
 	rm -f *.o *.out $(BIN) $(LOGIN).tar
