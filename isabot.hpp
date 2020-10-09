@@ -45,6 +45,11 @@ void ParseOpt(int argc, char** argv, char* access_token);
 /**
  * @brief
  */
+void PrintHelp();
+
+/**
+ * @brief
+ */
 int OpenConnection(const char* hostname, int port);
 
 /**

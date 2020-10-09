@@ -7,10 +7,10 @@
 void ErrExit(int errnum, const char* err)
 {
     if (strlen(err))
-        fprintf(stderr, "ERROR: %s.\n", err);
+        cerr << "ERROR: " << err << "." << endl;
     switch (errnum) {
     case BAD_OPTIONS:
-        fprintf(stderr, "Try 'isabot -h|--help' for more information.\n");
+        cerr << "Try 'isabot -h|--help' for more information." << endl;
         break;
     }
     exit(errnum);
@@ -35,8 +35,7 @@ void ParseOpt(int argc, char** argv, char* access_token)
 
         switch (opt) {
         case 'h':
-            printf("HELP WILL BE DISPLAYED HERE...\n");
-            exit(EXIT_SUCCESS);
+            PrintHelp();
             break;
         case 'v':
             if (flag_verbose == false)
@@ -58,15 +57,23 @@ void ParseOpt(int argc, char** argv, char* access_token)
     }
 
     if (optind < argc) {
-        fprintf(stderr, "Non-option arguments detected: ");
+        cerr << "Non-option arguments detected: ";
         while (optind < argc)
-            fprintf(stderr, "%s ", argv[optind++]);
-        fprintf(stderr, "\n");
+            cerr << argv[optind++] << " ";
+        cerr << endl;
         ErrExit(BAD_OPTIONS, "");
     }
 
-    if (flag_access_token == false)
-        ErrExit(BAD_OPTIONS, "bad option - option '-t <access_token>' is missing");
+    if (flag_access_token)
+        return;
+
+    PrintHelp();
+}
+
+void PrintHelp()
+{
+    cout << "HELP WILL BE WRITTEN HERE..." << endl;
+    exit(EXIT_SUCCESS);
 }
 
 int OpenConnection(const char* hostname, int port)
@@ -154,12 +161,6 @@ vector<string> SplitString(string str, string delimiter)
     return list;
 }
 
-void PrintVector(vector<string> const &input)
-{
-    for (unsigned int i = 0; i < input.size(); i++)
-        cout << i << ".) " << input.at(i) << endl << endl;
-}
-
 int main(int argc, char** argv)
 {
     /***** PARSING OF THE ARGUMENTS *****/
@@ -180,10 +181,11 @@ int main(int argc, char** argv)
         SSL_CTX_free(ctx);
         ERR_print_errors_fp(stderr);
         ErrExit(EXIT_FAILURE, "SSL connection failed");
-    }
-    else {
-        if (flag_verbose)
-            printf("* Successfully connected with %s encryption...\n", SSL_get_cipher(ssl));
+    } else {
+
+#ifdef DEBUG
+    cout << "* Successfully connected with " << SSL_get_cipher(ssl) << " encryption..." << endl;
+#endif
 
         string received;
         char buffer_request[BUFFER];
@@ -195,8 +197,10 @@ int main(int argc, char** argv)
 
         SSL_write(ssl, buffer_request, strlen(buffer_request));   /* encrypt & send message */
         SSL_read_answer(ssl, &received);
-        if (flag_verbose)
-            printf("\n* Bot guilds received...\n");
+
+#ifdef DEBUG
+    cout << endl << "* Bot guilds received..." << endl;
+#endif
 
         const regex r_id_whole("(\"id\": \"[0-9]+\")");
         const regex r_id_num("([0-9]+)");
@@ -222,9 +226,16 @@ int main(int argc, char** argv)
                 guild_id.clear();
                 guild_id += match[0];
             }
+        } else {
+            SSL_free(ssl);
+            close(sock);
+            SSL_CTX_free(ctx);
+            ErrExit(EXIT_FAILURE, "BOT unauthorized");
         }
-        if (flag_verbose)
-            cout << "   - Guild ID: " << guild_id << endl;
+
+#ifdef DEBUG
+    cout << "   - Guild ID: " << guild_id << endl;
+#endif
 
         memset(buffer_request, 0, sizeof(buffer_request));
 
@@ -236,8 +247,10 @@ int main(int argc, char** argv)
 
         SSL_write(ssl, buffer_request, strlen(buffer_request));   /* encrypt & send message */
         SSL_read_answer(ssl, &received);
-        if (flag_verbose)
-            printf("\n* Guild channels received...\n");
+
+#ifdef DEBUG
+    cout << endl << "* Guild channels received..." << endl;
+#endif
 
         string channel;
         string channel_id;
@@ -264,9 +277,16 @@ int main(int argc, char** argv)
                 last_message_id.clear();
                 last_message_id += match[0];
             }
+        } else {
+            SSL_free(ssl);
+            close(sock);
+            SSL_CTX_free(ctx);
+            ErrExit(EXIT_FAILURE, "there is wrong number of \"isa-bot\" channels in specified Discord guild");
         }
-        if (flag_verbose)
-            cout << "   - \"isa-bot\" channel ID: " << channel_id << endl;
+
+#ifdef DEBUG
+    cout << "   - \"isa-bot\" channel ID: " << channel_id << endl;
+#endif
 
         while (true) {
             memset(buffer_request, 0, sizeof(buffer_request));
@@ -281,8 +301,10 @@ int main(int argc, char** argv)
 
             SSL_write(ssl, buffer_request, strlen(buffer_request));   /* encrypt & send message */
             SSL_read_answer(ssl, &received);
-            if (flag_verbose)
-                printf("\n* Trying to receive new messages...\n");
+
+#ifdef DEBUG
+    cout << endl << "* Trying to receive new messages..." << endl;
+#endif
 
             string all_messages;
             string username;
@@ -294,8 +316,10 @@ int main(int argc, char** argv)
                     usleep(5000000);
                     continue;
                 }
-                if (flag_verbose)
-                    cout << "   - New messages received..." << endl;
+
+#ifdef DEBUG
+    cout << "   - New messages received..." << endl;
+#endif
 
                 vector<string> splitted_messages = SplitString(all_messages, "}, {");
 
@@ -307,7 +331,7 @@ int main(int argc, char** argv)
                         last_message_id += match[0];
                     }
                 }
-                // PrintVector(splitted_messages);
+
                 for (int i = splitted_messages.size() - 1; i >= 0; i--) {
                     username.clear();
                     content.clear();
@@ -321,7 +345,11 @@ int main(int argc, char** argv)
                         username += splitted_username.at(0);
                     }
                     if (string::npos != username.find("bot")) { //if bot is a substring in username username => continue
-                        cout << "\n* Message from bot, skipping..." << endl;
+
+#ifdef DEBUG
+    cout << endl << "* Message from bot, skipping..." << endl;
+#endif
+
                         continue;
                     }
                     if (regex_search(splitted_messages.at(i), match, r_message_content)) {
@@ -333,6 +361,9 @@ int main(int argc, char** argv)
                         content.clear();
                         content += splitted_content.at(0);
                     }
+
+                    if (flag_verbose)
+                        cout << "#isa-bot - " << username << ": " << content << endl;
 
                     char json_message[512];
                     memset(json_message, 0, sizeof(json_message));
@@ -361,31 +392,46 @@ int main(int argc, char** argv)
                     strcat(buffer_request, "\r\n\r\n");
 
                     SSL_write(ssl, buffer_request, strlen(buffer_request));   /* encrypt & send message */
-                    if (flag_verbose)
-                        cout << "   - Echo to message sent..." << endl;
+
+#ifdef DEBUG
+    cout << "   - Echo to message sent..." << endl;
+#endif
+
                     SSL_read_answer(ssl, &received);
-                    if (flag_verbose) {
-                        cout << "\n* Answer:\n" << endl;
-                        cout << received << endl;
-                    }
+
+#ifdef DEBUG
+    cout << endl << "* Answer:\n" << endl << received << endl;
+#endif
+
                 }
+            } else {
+                SSL_free(ssl);
+                close(sock);
+                SSL_CTX_free(ctx);
+                ErrExit(EXIT_FAILURE, "Unknown error, please contact the autor: xgrenc00@stud.fit.vutbr.cz");
             }
             usleep(5000000); // sleep for 5 seconds
         }
 
         SSL_free(ssl);        /* release connection state */
-        if (flag_verbose)
-            printf("\n* Connection released...\n");
-    }
 
-    close(sock);         /* close socket */
-    if (flag_verbose)
-        printf("\n* Socket closed...\n");
-    SSL_CTX_free(ctx);        /* release context */
-    if (flag_verbose) {
-        printf("\n* Context released...\n");
-        printf("\n* EXIT SUCCESS...\n");
+#ifdef DEBUG
+    cout << endl << "* Connection released..." << endl;
+#endif
+
     }
+    close(sock);         /* close socket */
+
+#ifdef DEBUG
+    cout << endl << "* Socket closed..." << endl;
+#endif
+
+    SSL_CTX_free(ctx);        /* release context */
+
+#ifdef DEBUG
+    cout << endl << "* Context released..." << endl << "* EXIT SUCCESS..." << endl;
+#endif
+
     return EXIT_SUCCESS;
 }
 /*** End of file isabot.cpp ***/
