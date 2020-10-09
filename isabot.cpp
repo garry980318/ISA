@@ -126,16 +126,31 @@ SSL_CTX* InitCTX()
     return ctx;
 }
 
-vector<string> split(string s, string delimiter){
-    vector<string> list;
-    size_t pos = 0;
-    string token;
-    while ((pos = s.find(delimiter)) != string::npos) {
-        token = s.substr(0, pos);
-        list.push_back(token);
-        s.erase(0, pos + delimiter.length());
+void SSL_read_answer(SSL *ssl, string *received)
+{
+    int bytes = 0;
+    char buffer_answer[BUFFER];
+    memset(buffer_answer, 0, sizeof(buffer_answer));
+
+    received->clear();
+    while(bytes != -1) {
+        bytes = SSL_read(ssl, buffer_answer, sizeof(buffer_answer) - 1); /* get reply & decrypt */
+        *received += buffer_answer;
+        memset(buffer_answer, 0, sizeof(buffer_answer));
     }
-    list.push_back(s);
+}
+
+vector<string> split(string str, string delimiter)
+{
+    vector<string> list;
+    size_t position = 0;
+    string token;
+    while ((position = str.find(delimiter)) != string::npos) {
+        token = str.substr(0, position);
+        list.push_back(token);
+        str.erase(0, position + delimiter.length());
+    }
+    list.push_back(str);
     return list;
 }
 
@@ -150,11 +165,6 @@ int main(int argc, char** argv)
     /***** PARSING OF THE ARGUMENTS *****/
     char access_token[512];
     ParseOpt(argc, argv, access_token);
-
-#ifdef DEBUG
-    printf("Verbose: %s\n", flag_verbose ? "true" : "false");
-    printf("Access token: %s\n", access_token);
-#endif
 
     SSL_CTX *ctx;
     int sock;
@@ -172,27 +182,21 @@ int main(int argc, char** argv)
         ErrExit(EXIT_FAILURE, "SSL connection failed");
     }
     else {
-        printf("* Connected with %s encryption\n", SSL_get_cipher(ssl));
+        if (flag_verbose)
+            printf("* Successfully connected with %s encryption...\n", SSL_get_cipher(ssl));
 
+        string received;
         char buffer_request[BUFFER];
-        char buffer_answer[BUFFER];
         memset(buffer_request, 0, sizeof(buffer_request));
-        memset(buffer_answer, 0, sizeof(buffer_answer));
 
         strcpy(buffer_request, "GET /api/v6/users/@me/guilds HTTP/1.1\r\nHost: discord.com\r\nAuthorization: Bot ");
         strcat(buffer_request, access_token);
         strcat(buffer_request, "\r\n\r\n");
 
         SSL_write(ssl, buffer_request, strlen(buffer_request));   /* encrypt & send message */
-
-        string received;
-        printf("\n* Received:\n\n");
-        int bytes = 0;
-        while(bytes != -1) {
-            bytes = SSL_read(ssl, buffer_answer, sizeof(buffer_answer) - 1); /* get reply & decrypt */
-            received += buffer_answer;
-            memset(buffer_answer, 0, sizeof(buffer_answer));
-        }
+        SSL_read_answer(ssl, &received);
+        if (flag_verbose)
+            printf("\n* Bot guilds received...\n");
 
         const regex r_id_whole("(\"id\": \"[0-9]+\")");
         const regex r_id_num("([0-9]+)");
@@ -206,7 +210,7 @@ int main(int argc, char** argv)
                 SSL_free(ssl);
                 close(sock);
                 SSL_CTX_free(ctx);
-                ErrExit(EXIT_FAILURE, "BOT must be member of exactly one Discord server");
+                ErrExit(EXIT_FAILURE, "BOT must be member of exactly one Discord guild");
             }
             whole_id += sm_id_whole[0];
             if (regex_search(whole_id, sm_id_num, r_id_num))
@@ -214,7 +218,6 @@ int main(int argc, char** argv)
         }
 
         memset(buffer_request, 0, sizeof(buffer_request));
-        memset(buffer_answer, 0, sizeof(buffer_answer));
 
         strcpy(buffer_request, "GET /api/v6/guilds/");
         strcat(buffer_request, guild_id.c_str());
@@ -223,15 +226,9 @@ int main(int argc, char** argv)
         strcat(buffer_request, "\r\n\r\n");
 
         SSL_write(ssl, buffer_request, strlen(buffer_request));   /* encrypt & send message */
-
-        received.clear();
-        printf("\n* Received:\n\n");
-        bytes = 0;
-        while(bytes != -1) {
-            bytes = SSL_read(ssl, buffer_answer, sizeof(buffer_answer) - 1); /* get reply & decrypt */
-            received += buffer_answer;
-            memset(buffer_answer, 0, sizeof(buffer_answer));
-        }
+        SSL_read_answer(ssl, &received);
+        if (flag_verbose)
+            printf("\n* Guild channels received...\n");
 
         const regex r_isa_bot_channel("(\"id\": \"[0-9]+\", \"last_message_id\": (null|\"[0-9]+\"), \"type\": [0-9]+, \"name\": \"isa-bot\")");
         const regex r_whole_last_message_id("(\"last_message_id\": (null|\"[0-9]+\"))");
@@ -252,7 +249,7 @@ int main(int argc, char** argv)
                 SSL_free(ssl);
                 close(sock);
                 SSL_CTX_free(ctx);
-                ErrExit(EXIT_FAILURE, "there is wrong number of \"isa-bot\" channels in specified Discord server");
+                ErrExit(EXIT_FAILURE, "there is wrong number of \"isa-bot\" channels in specified Discord guild");
             }
             channel += sm_isa_bot_channel[0];
             if (regex_search(channel, sm_isa_bot_whole_channel_id, r_id_whole))
@@ -269,27 +266,19 @@ int main(int argc, char** argv)
         // cout << channel_id << endl;
 
         memset(buffer_request, 0, sizeof(buffer_request));
-        memset(buffer_answer, 0, sizeof(buffer_answer));
 
         strcpy(buffer_request, "GET /api/v6/channels/");
         strcat(buffer_request, channel_id.c_str());
-        strcat(buffer_request, "/messages HTTP/1.1\r\nHost: discord.com\r\nAuthorization: Bot ");
-        strcat(buffer_request, access_token);
-        strcat(buffer_request, "\r\nafter: ");
+        strcat(buffer_request, "/messages?after=");
         strcat(buffer_request, last_message_id.c_str());
+        strcat(buffer_request, " HTTP/1.1\r\nHost: discord.com\r\nAuthorization: Bot ");
+        strcat(buffer_request, access_token);
         strcat(buffer_request, "\r\n\r\n");
 
         SSL_write(ssl, buffer_request, strlen(buffer_request));   /* encrypt & send message */
-
-        received.clear();
-        printf("\n* Received:\n\n");
-        bytes = 0;
-        while(bytes != -1) {
-            bytes = SSL_read(ssl, buffer_answer, sizeof(buffer_answer) - 1); /* get reply & decrypt */
-            received += buffer_answer;
-            memset(buffer_answer, 0, sizeof(buffer_answer));
-        }
-
+        SSL_read_answer(ssl, &received);
+        if (flag_verbose)
+            printf("\n* New messages received...\n");
         cout << received << endl;
 
         const regex r_messages("(\n\\[.*\\])");
@@ -303,13 +292,18 @@ int main(int argc, char** argv)
         }
 
         SSL_free(ssl);        /* release connection state */
-        printf("\n* Connection released...\n");
+        if (flag_verbose)
+            printf("\n* Connection released...\n");
     }
 
     close(sock);         /* close socket */
-    printf("\n* Socket closed...\n");
+    if (flag_verbose)
+        printf("\n* Socket closed...\n");
     SSL_CTX_free(ctx);        /* release context */
-    printf("\n* Context released...\n");
+    if (flag_verbose) {
+        printf("\n* Context released...\n");
+        printf("\n* EXIT SUCCESS...\n");
+    }
     return EXIT_SUCCESS;
 }
 /*** End of file isabot.cpp ***/

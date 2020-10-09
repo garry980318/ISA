@@ -52,5 +52,15 @@ int OpenConnection(const char* hostname, int port);
  */
 SSL_CTX* InitCTX();
 
+/**
+ * @brief
+ */
+void SSL_read_answer(SSL *ssl, string *received);
+
+/**
+ * @brief
+ */
+vector<string> split(string str, string delimiter);
+
 #endif
 /*** End of file isabot.hpp ***/
