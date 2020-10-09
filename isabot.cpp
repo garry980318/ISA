@@ -282,7 +282,7 @@ int main(int argc, char** argv)
             SSL_write(ssl, buffer_request, strlen(buffer_request));   /* encrypt & send message */
             SSL_read_answer(ssl, &received);
             if (flag_verbose)
-                printf("\n* New messages received...\n");
+                printf("\n* Trying to receive new messages...\n");
 
             string all_messages;
             string username;
@@ -294,6 +294,9 @@ int main(int argc, char** argv)
                     usleep(5000000);
                     continue;
                 }
+                if (flag_verbose)
+                    cout << "   - New messages received..." << endl;
+
                 vector<string> splitted_messages = SplitString(all_messages, "}, {");
 
                 if (regex_search(splitted_messages.at(0), match, r_id_whole)) {
@@ -317,8 +320,10 @@ int main(int argc, char** argv)
                         username.clear();
                         username += splitted_username.at(0);
                     }
-                    if (string::npos != username.find("bot")) //if bot is a substring in username username => continue
+                    if (string::npos != username.find("bot")) { //if bot is a substring in username username => continue
+                        cout << "\n* Message from bot, skipping..." << endl;
                         continue;
+                    }
                     if (regex_search(splitted_messages.at(i), match, r_message_content)) {
                         content += match[0];
                         vector<string> splitted_content = SplitString(content, "\"content\": \"");
@@ -329,11 +334,17 @@ int main(int argc, char** argv)
                         content += splitted_content.at(0);
                     }
 
-                    string json_message += "{\"content\": \"echo: ";
-                    json_message += username;
-                    json_message += " - ";
-                    json_message += content;
-                    json_message += "\"}";
+                    char json_message[512];
+                    memset(json_message, 0, sizeof(json_message));
+                    strcpy(json_message, "{\"content\": \"echo: ");
+                    strcat(json_message, username.c_str());
+                    strcat(json_message, " - ");
+                    strcat(json_message, content.c_str());
+                    strcat(json_message, "\"}");
+
+                    char json_message_size[32];
+                    memset(json_message_size, 0, sizeof(json_message_size));
+                    sprintf(json_message_size, "%lu", strlen(json_message));
 
                     //echo the message
                     memset(buffer_request, 0, sizeof(buffer_request));
@@ -342,14 +353,21 @@ int main(int argc, char** argv)
                     strcat(buffer_request, channel_id.c_str());
                     strcat(buffer_request, "/messages HTTP/1.1\r\nHost: discord.com\r\nAuthorization: Bot ");
                     strcat(buffer_request, access_token);
+                    strcat(buffer_request, "\r\nContent-Type: application/json");
                     strcat(buffer_request, "\r\nContent-Length: ");
-                    strcat(buffer_request, json_message.size());
+                    strcat(buffer_request, json_message_size);
                     strcat(buffer_request, "\r\n\r\n");
-                    strcat(buffer_request, json_message.c_str());
+                    strcat(buffer_request, json_message);
+                    strcat(buffer_request, "\r\n\r\n");
 
                     SSL_write(ssl, buffer_request, strlen(buffer_request));   /* encrypt & send message */
+                    if (flag_verbose)
+                        cout << "   - Echo to message sent..." << endl;
                     SSL_read_answer(ssl, &received);
-                    cout << received << endl;
+                    if (flag_verbose) {
+                        cout << "\n* Answer:\n" << endl;
+                        cout << received << endl;
+                    }
                 }
             }
             usleep(5000000); // sleep for 5 seconds
