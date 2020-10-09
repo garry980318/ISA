@@ -203,6 +203,8 @@ int main(int argc, char** argv)
         const regex r_whole_last_message_id("(\"last_message_id\": (null|\"[0-9]+\"))");
         const regex r_last_message_id("(null|[0-9]+)");
         const regex r_messages("(\n\\[.*\\])");
+        const regex r_message_content("(\"content\": \".*\", \"channel_id\":)");
+        const regex r_message_username("(\"username\": \".*\", \"avatar\":)");
         const regex r_isa_bot_channel("(\"id\": \"[0-9]+\", \"last_message_id\": (null|\"[0-9]+\"), \"type\": [0-9]+, \"name\": \"isa-bot\")");
         smatch match;
 
@@ -280,12 +282,18 @@ int main(int argc, char** argv)
             SSL_write(ssl, buffer_request, strlen(buffer_request));   /* encrypt & send message */
             SSL_read_answer(ssl, &received);
             if (flag_verbose)
-            printf("\n* New messages received...\n");
+                printf("\n* New messages received...\n");
 
             string all_messages;
+            string username;
+            string content;
 
             if (regex_search(received, match, r_messages)) {
                 all_messages += match[0];
+                if (all_messages.compare("\n[]") == 0) {
+                    usleep(5000000);
+                    continue;
+                }
                 vector<string> splitted_messages = SplitString(all_messages, "}, {");
 
                 if (regex_search(splitted_messages.at(0), match, r_id_whole)) {
@@ -296,7 +304,53 @@ int main(int argc, char** argv)
                         last_message_id += match[0];
                     }
                 }
-                PrintVector(splitted_messages);
+                // PrintVector(splitted_messages);
+                for (int i = splitted_messages.size() - 1; i >= 0; i--) {
+                    username.clear();
+                    content.clear();
+                    if (regex_search(splitted_messages.at(i), match, r_message_username)) {
+                        username += match[0];
+                        vector<string> splitted_username = SplitString(username, "\"username\": \"");
+                        username.clear();
+                        username += splitted_username.at(1);
+                        splitted_username = SplitString(username, "\", \"avatar\":");
+                        username.clear();
+                        username += splitted_username.at(0);
+                    }
+                    if (string::npos != username.find("bot")) //if bot is a substring in username username => continue
+                        continue;
+                    if (regex_search(splitted_messages.at(i), match, r_message_content)) {
+                        content += match[0];
+                        vector<string> splitted_content = SplitString(content, "\"content\": \"");
+                        content.clear();
+                        content += splitted_content.at(1);
+                        splitted_content = SplitString(content, "\", \"channel_id\":");
+                        content.clear();
+                        content += splitted_content.at(0);
+                    }
+
+                    string json_message += "{\"content\": \"echo: ";
+                    json_message += username;
+                    json_message += " - ";
+                    json_message += content;
+                    json_message += "\"}";
+
+                    //echo the message
+                    memset(buffer_request, 0, sizeof(buffer_request));
+
+                    strcpy(buffer_request, "POST /api/v6/channels/");
+                    strcat(buffer_request, channel_id.c_str());
+                    strcat(buffer_request, "/messages HTTP/1.1\r\nHost: discord.com\r\nAuthorization: Bot ");
+                    strcat(buffer_request, access_token);
+                    strcat(buffer_request, "\r\nContent-Length: ");
+                    strcat(buffer_request, json_message.size());
+                    strcat(buffer_request, "\r\n\r\n");
+                    strcat(buffer_request, json_message.c_str());
+
+                    SSL_write(ssl, buffer_request, strlen(buffer_request));   /* encrypt & send message */
+                    SSL_read_answer(ssl, &received);
+                    cout << received << endl;
+                }
             }
             usleep(5000000); // sleep for 5 seconds
         }
