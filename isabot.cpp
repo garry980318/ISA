@@ -140,7 +140,7 @@ void SSL_read_answer(SSL *ssl, string *received)
     }
 }
 
-vector<string> split(string str, string delimiter)
+vector<string> SplitString(string str, string delimiter)
 {
     vector<string> list;
     size_t position = 0;
@@ -200,22 +200,29 @@ int main(int argc, char** argv)
 
         const regex r_id_whole("(\"id\": \"[0-9]+\")");
         const regex r_id_num("([0-9]+)");
-        smatch sm_id_whole;
-        smatch sm_id_num;
-        string whole_id;
+        const regex r_whole_last_message_id("(\"last_message_id\": (null|\"[0-9]+\"))");
+        const regex r_last_message_id("(null|[0-9]+)");
+        const regex r_messages("(\n\\[.*\\])");
+        const regex r_isa_bot_channel("(\"id\": \"[0-9]+\", \"last_message_id\": (null|\"[0-9]+\"), \"type\": [0-9]+, \"name\": \"isa-bot\")");
+        smatch match;
+
         string guild_id;
 
-        if (regex_search(received, sm_id_whole, r_id_whole)) {
-            if (sm_id_whole.size() < 1 || sm_id_whole.size() > 2) {
+        if (regex_search(received, match, r_id_whole)) {
+            if (match.size() < 1 || match.size() > 2) {
                 SSL_free(ssl);
                 close(sock);
                 SSL_CTX_free(ctx);
                 ErrExit(EXIT_FAILURE, "BOT must be member of exactly one Discord guild");
             }
-            whole_id += sm_id_whole[0];
-            if (regex_search(whole_id, sm_id_num, r_id_num))
-                guild_id += sm_id_num[0];
+            guild_id += match[0];
+            if (regex_search(guild_id, match, r_id_num)) {
+                guild_id.clear();
+                guild_id += match[0];
+            }
         }
+        if (flag_verbose)
+            cout << "   - Guild ID: " << guild_id << endl;
 
         memset(buffer_request, 0, sizeof(buffer_request));
 
@@ -230,65 +237,68 @@ int main(int argc, char** argv)
         if (flag_verbose)
             printf("\n* Guild channels received...\n");
 
-        const regex r_isa_bot_channel("(\"id\": \"[0-9]+\", \"last_message_id\": (null|\"[0-9]+\"), \"type\": [0-9]+, \"name\": \"isa-bot\")");
-        const regex r_whole_last_message_id("(\"last_message_id\": (null|\"[0-9]+\"))");
-        const regex r_last_message_id("(null|[0-9]+)");
-        smatch sm_isa_bot_channel;
-        smatch sm_isa_bot_whole_channel_id;
-        smatch sm_isa_bot_channel_id;
-        smatch sm_whole_last_message_id;
-        smatch sm_last_message_id;
         string channel;
-        string whole_channel_id;
         string channel_id;
-        string whole_last_message_id;
         string last_message_id;
 
-        if (regex_search(received, sm_isa_bot_channel, r_isa_bot_channel)) {
-            if (sm_isa_bot_channel.size() < 1 || sm_isa_bot_channel.size() > 3) {
+        if (regex_search(received, match, r_isa_bot_channel)) {
+            if (match.size() < 1 || match.size() > 3) {
                 SSL_free(ssl);
                 close(sock);
                 SSL_CTX_free(ctx);
                 ErrExit(EXIT_FAILURE, "there is wrong number of \"isa-bot\" channels in specified Discord guild");
             }
-            channel += sm_isa_bot_channel[0];
-            if (regex_search(channel, sm_isa_bot_whole_channel_id, r_id_whole))
-                whole_channel_id += sm_isa_bot_whole_channel_id[0];
-            if (regex_search(whole_channel_id, sm_isa_bot_channel_id, r_id_num))
-                channel_id += sm_isa_bot_channel_id[0];
+            channel += match[0];
+            if (regex_search(channel, match, r_id_whole))
+                channel_id += match[0];
+            if (regex_search(channel_id, match, r_id_num)) {
+                channel_id.clear();
+                channel_id += match[0];
+            }
 
-            if (regex_search(channel, sm_whole_last_message_id, r_whole_last_message_id))
-                whole_last_message_id += sm_whole_last_message_id[0];
-            if (regex_search(whole_last_message_id, sm_last_message_id, r_last_message_id))
-                last_message_id += sm_last_message_id[0];
+            if (regex_search(channel, match, r_whole_last_message_id))
+                last_message_id += match[0];
+            if (regex_search(last_message_id, match, r_last_message_id)) {
+                last_message_id.clear();
+                last_message_id += match[0];
+            }
         }
-
-        // cout << channel_id << endl;
-
-        memset(buffer_request, 0, sizeof(buffer_request));
-
-        strcpy(buffer_request, "GET /api/v6/channels/");
-        strcat(buffer_request, channel_id.c_str());
-        strcat(buffer_request, "/messages?after=");
-        strcat(buffer_request, last_message_id.c_str());
-        strcat(buffer_request, " HTTP/1.1\r\nHost: discord.com\r\nAuthorization: Bot ");
-        strcat(buffer_request, access_token);
-        strcat(buffer_request, "\r\n\r\n");
-
-        SSL_write(ssl, buffer_request, strlen(buffer_request));   /* encrypt & send message */
-        SSL_read_answer(ssl, &received);
         if (flag_verbose)
+            cout << "   - \"isa-bot\" channel ID: " << channel_id << endl;
+
+        while (true) {
+            memset(buffer_request, 0, sizeof(buffer_request));
+
+            strcpy(buffer_request, "GET /api/v6/channels/");
+            strcat(buffer_request, channel_id.c_str());
+            strcat(buffer_request, "/messages?after=");
+            strcat(buffer_request, last_message_id.c_str());
+            strcat(buffer_request, " HTTP/1.1\r\nHost: discord.com\r\nAuthorization: Bot ");
+            strcat(buffer_request, access_token);
+            strcat(buffer_request, "\r\n\r\n");
+
+            SSL_write(ssl, buffer_request, strlen(buffer_request));   /* encrypt & send message */
+            SSL_read_answer(ssl, &received);
+            if (flag_verbose)
             printf("\n* New messages received...\n");
-        cout << received << endl;
 
-        const regex r_messages("(\n\\[.*\\])");
-        smatch sm_messages;
-        string json_messages;
+            string all_messages;
 
-        if (regex_search(received, sm_messages, r_messages)) {
-            json_messages += sm_messages[0];
-            vector<string> messages = split(json_messages, "}, {");
-            PrintVector(messages);
+            if (regex_search(received, match, r_messages)) {
+                all_messages += match[0];
+                vector<string> splitted_messages = SplitString(all_messages, "}, {");
+
+                if (regex_search(splitted_messages.at(0), match, r_id_whole)) {
+                    last_message_id.clear();
+                    last_message_id += match[0];
+                    if (regex_search(last_message_id, match, r_id_num)) {
+                        last_message_id.clear();
+                        last_message_id += match[0];
+                    }
+                }
+                PrintVector(splitted_messages);
+            }
+            usleep(5000000); // sleep for 5 seconds
         }
 
         SSL_free(ssl);        /* release connection state */

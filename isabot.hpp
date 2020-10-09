@@ -60,7 +60,7 @@ void SSL_read_answer(SSL *ssl, string *received);
 /**
  * @brief
  */
-vector<string> split(string str, string delimiter);
+vector<string> SplitString(string str, string delimiter);
 
 #endif
 /*** End of file isabot.hpp ***/
