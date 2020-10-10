@@ -85,55 +85,46 @@ void PrintHelp()
     exit(EXIT_SUCCESS);
 }
 
-int OpenConnection(const char* hostname, int port)
+bool OpenConnection(int *sock, const char* hostname, int port)
 {
-    int sock;
     struct sockaddr_in server;
     memset(&server, 0, sizeof(server));
 
-    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) //create a client socket
-        ErrExit(EXIT_FAILURE, "socket() failed");
+    if ((*sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) //create a client socket
+        return false;
 
     struct timeval timeout;
     timeout.tv_sec = 1;
     timeout.tv_usec = 0;
 
-    if (setsockopt (sock, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
-        close(sock);
-        ErrExit(EXIT_FAILURE, "setsockopt failed");
-    }
+    if (setsockopt (*sock, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0)
+        return false;
 
-    if (setsockopt (sock, SOL_SOCKET, SO_SNDTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
-        close(sock);
-        ErrExit(EXIT_FAILURE, "setsockopt failed");
-    }
+    if (setsockopt (*sock, SOL_SOCKET, SO_SNDTIMEO, (char *)&timeout, sizeof(timeout)) < 0)
+        return false;
 
     struct hostent* he;
     he = gethostbyname(hostname);
-    if (he == NULL) {
-        close(sock);
-        ErrExit(EXIT_FAILURE, "IP not found");
-    }
+    if (he == NULL)
+        return false;
 
     server.sin_addr.s_addr = inet_addr(inet_ntoa(*((struct in_addr*)he->h_addr_list[0])));
     server.sin_family = AF_INET;
     server.sin_port = htons(port);
 
-    if (connect(sock, (struct sockaddr*)&server, sizeof(server)) == -1) {
-        close(sock);
-        ErrExit(EXIT_FAILURE, "connect() failed");
-    }
+    if (connect(*sock, (struct sockaddr*)&server, sizeof(server)) == -1)
+        return false;
 
-    return sock;
+    return true;
 }
 
 SSL_CTX* InitCTX()
 {
-    const SSL_METHOD *method;
-    SSL_CTX *ctx;
-    OpenSSL_add_all_algorithms();  /* Load cryptos, et.al. */
     SSL_load_error_strings();   /* Bring in and register error messages */
+    SSL_library_init();
+    OpenSSL_add_all_algorithms();  /* Load cryptos, et.al. */
 
+    const SSL_METHOD *method;
     // if OpenSSL is prior version 1.1.x, older client method is needed
     #if (OPENSSL_VERSION_NUMBER < 0x010100000)
         method = TLSv1_client_method();
@@ -141,9 +132,12 @@ SSL_CTX* InitCTX()
         method = TLS_client_method();
     #endif
 
+    SSL_CTX *ctx;
     ctx = SSL_CTX_new(method);   /* Create new context */
     if (ctx == NULL) {
         ERR_print_errors_fp(stderr);
+        EVP_cleanup();
+        ERR_free_strings();
         ErrExit(EXIT_FAILURE, "creating of new context failed");
     }
     return ctx;
@@ -177,6 +171,15 @@ vector<string> SplitString(string str, string delimiter)
     return list;
 }
 
+void Cleanup(SSL_CTX *ctx, int sock, SSL *ssl)
+{
+    SSL_free(ssl); // release connection state
+    close(sock); // close socket
+    SSL_CTX_free(ctx); // release context
+    EVP_cleanup();
+    ERR_free_strings();
+}
+
 int main(int argc, char** argv)
 {
     signal(SIGINT, SIGINTHandler);
@@ -189,78 +192,131 @@ int main(int argc, char** argv)
     int sock;
     SSL *ssl;
 
-    SSL_library_init();
     ctx = InitCTX();
-    sock = OpenConnection("discord.com", HTTPS);
-    ssl = SSL_new(ctx);      /* create new SSL connection state */
-    SSL_set_fd(ssl, sock);    /* attach the socket descriptor */
-    if (SSL_connect(ssl) == -1) {   /* perform the connection */
-        SSL_free(ssl);
-        close(sock);
+    if (OpenConnection(&sock, "discord.com", HTTPS) == false) {
+        if (sock != -1)
+            close(sock);
         SSL_CTX_free(ctx);
+        EVP_cleanup();
+        ERR_free_strings();
+    }
+    ssl = SSL_new(ctx);      /* create new SSL connection state */
+    if (SSL_set_fd(ssl, sock) == 0 ) {    /* attach the socket descriptor */
         ERR_print_errors_fp(stderr);
+        Cleanup(ctx, sock, ssl);
+        ErrExit(EXIT_FAILURE, "SSL_set_fd() failed");
+    }
+    if (SSL_connect(ssl) == -1) {   /* perform the connection */
+        ERR_print_errors_fp(stderr);
+        Cleanup(ctx, sock, ssl);
         ErrExit(EXIT_FAILURE, "SSL connection failed");
-    } else {
+    }
 
 #ifdef DEBUG
     cout << "* Successfully connected with " << SSL_get_cipher(ssl) << " encryption..." << endl;
 #endif
 
-        string received;
-        char buffer_request[BUFFER];
-        memset(buffer_request, 0, sizeof(buffer_request));
+    string received;
+    char buffer_request[BUFFER];
+    memset(buffer_request, 0, sizeof(buffer_request));
 
-        strcpy(buffer_request, "GET /api/v6/users/@me/guilds HTTP/1.1\r\nHost: discord.com\r\nAuthorization: Bot ");
-        strcat(buffer_request, access_token);
-        strcat(buffer_request, "\r\n\r\n");
+    strcpy(buffer_request, "GET /api/v6/users/@me/guilds HTTP/1.1\r\nHost: discord.com\r\nAuthorization: Bot ");
+    strcat(buffer_request, access_token);
+    strcat(buffer_request, "\r\n\r\n");
 
-        SSL_write(ssl, buffer_request, strlen(buffer_request));   /* encrypt & send message */
-        SSL_read_answer(ssl, &received);
+    SSL_write(ssl, buffer_request, strlen(buffer_request));   /* encrypt & send message */
+    SSL_read_answer(ssl, &received);
 
 #ifdef DEBUG
     cout << endl << "* Bot guilds received..." << endl;
 #endif
 
-        const regex r_id_whole("(\"id\": \"[0-9]+\")");
-        const regex r_id_num("([0-9]+)");
-        const regex r_whole_last_message_id("(\"last_message_id\": (null|\"[0-9]+\"))");
-        const regex r_last_message_id("(null|[0-9]+)");
-        const regex r_messages("(\n\\[.*\\])");
-        const regex r_message_content("(\"content\": \".*\", \"channel_id\":)");
-        const regex r_message_username("(\"username\": \".*\", \"avatar\":)");
-        const regex r_isa_bot_channel("(\"id\": \"[0-9]+\", \"last_message_id\": (null|\"[0-9]+\"), \"type\": [0-9]+, \"name\": \"isa-bot\")");
-        smatch match;
+    const regex r_id_whole("(\"id\": \"[0-9]+\")");
+    const regex r_id_num("([0-9]+)");
+    const regex r_whole_last_message_id("(\"last_message_id\": (null|\"[0-9]+\"))");
+    const regex r_last_message_id("(null|[0-9]+)");
+    const regex r_messages("(\n\\[.*\\])");
+    const regex r_message_content("(\"content\": \".*\", \"channel_id\":)");
+    const regex r_message_username("(\"username\": \".*\", \"avatar\":)");
+    const regex r_isa_bot_channel("(\"id\": \"[0-9]+\", \"last_message_id\": (null|\"[0-9]+\"), \"type\": [0-9]+, \"name\": \"isa-bot\")");
+    smatch match;
 
-        string guild_id;
+    string guild_id;
 
-        if (regex_search(received, match, r_id_whole)) {
-            if (match.size() < 1 || match.size() > 2) {
-                SSL_free(ssl);
-                close(sock);
-                SSL_CTX_free(ctx);
-                ErrExit(EXIT_FAILURE, "BOT must be member of exactly one Discord guild");
-            }
-            guild_id += match[0];
-            if (regex_search(guild_id, match, r_id_num)) {
-                guild_id.clear();
-                guild_id += match[0];
-            }
-        } else {
-            SSL_free(ssl);
-            close(sock);
-            SSL_CTX_free(ctx);
-            ErrExit(EXIT_FAILURE, "BOT unauthorized");
+    if (regex_search(received, match, r_id_whole)) {
+        if (match.size() < 1 || match.size() > 2) {
+            Cleanup(ctx, sock, ssl);
+            ErrExit(EXIT_FAILURE, "BOT must be member of exactly one Discord guild");
         }
+        guild_id += match[0];
+        if (regex_search(guild_id, match, r_id_num)) {
+            guild_id.clear();
+            guild_id += match[0];
+        }
+    } else {
+        Cleanup(ctx, sock, ssl);
+        ErrExit(EXIT_FAILURE, "BOT unauthorized");
+    }
 
 #ifdef DEBUG
     cout << "   - Guild ID: " << guild_id << endl;
 #endif
 
+    memset(buffer_request, 0, sizeof(buffer_request));
+
+    strcpy(buffer_request, "GET /api/v6/guilds/");
+    strcat(buffer_request, guild_id.c_str());
+    strcat(buffer_request, "/channels HTTP/1.1\r\nHost: discord.com\r\nAuthorization: Bot ");
+    strcat(buffer_request, access_token);
+    strcat(buffer_request, "\r\n\r\n");
+
+    SSL_write(ssl, buffer_request, strlen(buffer_request));   /* encrypt & send message */
+    SSL_read_answer(ssl, &received);
+
+#ifdef DEBUG
+    cout << endl << "* Guild channels received..." << endl;
+#endif
+
+    string channel;
+    string channel_id;
+    string last_message_id;
+
+    if (regex_search(received, match, r_isa_bot_channel)) {
+        if (match.size() < 1 || match.size() > 3) {
+            Cleanup(ctx, sock, ssl);
+            ErrExit(EXIT_FAILURE, "there is wrong number of \"isa-bot\" channels in specified Discord guild");
+        }
+        channel += match[0];
+        if (regex_search(channel, match, r_id_whole))
+            channel_id += match[0];
+        if (regex_search(channel_id, match, r_id_num)) {
+            channel_id.clear();
+            channel_id += match[0];
+        }
+
+        if (regex_search(channel, match, r_whole_last_message_id))
+            last_message_id += match[0];
+        if (regex_search(last_message_id, match, r_last_message_id)) {
+            last_message_id.clear();
+            last_message_id += match[0];
+        }
+    } else {
+        Cleanup(ctx, sock, ssl);
+        ErrExit(EXIT_FAILURE, "there is wrong number of \"isa-bot\" channels in specified Discord guild");
+    }
+
+#ifdef DEBUG
+    cout << "   - \"isa-bot\" channel ID: " << channel_id << endl;
+#endif
+
+    while (keep_running) {
         memset(buffer_request, 0, sizeof(buffer_request));
 
-        strcpy(buffer_request, "GET /api/v6/guilds/");
-        strcat(buffer_request, guild_id.c_str());
-        strcat(buffer_request, "/channels HTTP/1.1\r\nHost: discord.com\r\nAuthorization: Bot ");
+        strcpy(buffer_request, "GET /api/v6/channels/");
+        strcat(buffer_request, channel_id.c_str());
+        strcat(buffer_request, "/messages?after=");
+        strcat(buffer_request, last_message_id.c_str());
+        strcat(buffer_request, " HTTP/1.1\r\nHost: discord.com\r\nAuthorization: Bot ");
         strcat(buffer_request, access_token);
         strcat(buffer_request, "\r\n\r\n");
 
@@ -268,183 +324,115 @@ int main(int argc, char** argv)
         SSL_read_answer(ssl, &received);
 
 #ifdef DEBUG
-    cout << endl << "* Guild channels received..." << endl;
-#endif
-
-        string channel;
-        string channel_id;
-        string last_message_id;
-
-        if (regex_search(received, match, r_isa_bot_channel)) {
-            if (match.size() < 1 || match.size() > 3) {
-                SSL_free(ssl);
-                close(sock);
-                SSL_CTX_free(ctx);
-                ErrExit(EXIT_FAILURE, "there is wrong number of \"isa-bot\" channels in specified Discord guild");
-            }
-            channel += match[0];
-            if (regex_search(channel, match, r_id_whole))
-                channel_id += match[0];
-            if (regex_search(channel_id, match, r_id_num)) {
-                channel_id.clear();
-                channel_id += match[0];
-            }
-
-            if (regex_search(channel, match, r_whole_last_message_id))
-                last_message_id += match[0];
-            if (regex_search(last_message_id, match, r_last_message_id)) {
-                last_message_id.clear();
-                last_message_id += match[0];
-            }
-        } else {
-            SSL_free(ssl);
-            close(sock);
-            SSL_CTX_free(ctx);
-            ErrExit(EXIT_FAILURE, "there is wrong number of \"isa-bot\" channels in specified Discord guild");
-        }
-
-#ifdef DEBUG
-    cout << "   - \"isa-bot\" channel ID: " << channel_id << endl;
-#endif
-
-        while (keep_running) {
-            memset(buffer_request, 0, sizeof(buffer_request));
-
-            strcpy(buffer_request, "GET /api/v6/channels/");
-            strcat(buffer_request, channel_id.c_str());
-            strcat(buffer_request, "/messages?after=");
-            strcat(buffer_request, last_message_id.c_str());
-            strcat(buffer_request, " HTTP/1.1\r\nHost: discord.com\r\nAuthorization: Bot ");
-            strcat(buffer_request, access_token);
-            strcat(buffer_request, "\r\n\r\n");
-
-            SSL_write(ssl, buffer_request, strlen(buffer_request));   /* encrypt & send message */
-            SSL_read_answer(ssl, &received);
-
-#ifdef DEBUG
     cout << endl << "* Trying to receive new messages..." << endl;
 #endif
 
-            string all_messages;
-            string username;
-            string content;
+        string all_messages;
+        string username;
+        string content;
 
-            if (regex_search(received, match, r_messages)) {
-                all_messages += match[0];
-                if (all_messages.compare("\n[]") == 0) { // no new messages
-                    usleep(SLEEP);
-                    continue;
-                }
+        if (regex_search(received, match, r_messages)) {
+            all_messages += match[0];
+            if (all_messages.compare("\n[]") == 0) { // no new messages
+                usleep(SLEEP);
+                continue;
+            }
 
 #ifdef DEBUG
     cout << "   - New messages received..." << endl;
 #endif
 
-                vector<string> splitted_messages = SplitString(all_messages, "}, {");
+            vector<string> splitted_messages = SplitString(all_messages, "}, {");
 
-                if (regex_search(splitted_messages.at(0), match, r_id_whole)) {
+            if (regex_search(splitted_messages.at(0), match, r_id_whole)) {
+                last_message_id.clear();
+                last_message_id += match[0];
+                if (regex_search(last_message_id, match, r_id_num)) {
                     last_message_id.clear();
                     last_message_id += match[0];
-                    if (regex_search(last_message_id, match, r_id_num)) {
-                        last_message_id.clear();
-                        last_message_id += match[0];
-                    }
                 }
+            }
 
-                for (int i = splitted_messages.size() - 1; i >= 0; i--) {
+            for (int i = splitted_messages.size() - 1; i >= 0; i--) {
+                username.clear();
+                content.clear();
+                if (regex_search(splitted_messages.at(i), match, r_message_username)) {
+                    username += match[0];
+                    vector<string> splitted_username = SplitString(username, "\"username\": \"");
                     username.clear();
-                    content.clear();
-                    if (regex_search(splitted_messages.at(i), match, r_message_username)) {
-                        username += match[0];
-                        vector<string> splitted_username = SplitString(username, "\"username\": \"");
-                        username.clear();
-                        username += splitted_username.at(1);
-                        splitted_username = SplitString(username, "\", \"avatar\":");
-                        username.clear();
-                        username += splitted_username.at(0);
-                    }
-                    if (string::npos != username.find("bot") || string::npos != username.find("BOT")) { //if bot is a substring in username username => continue
+                    username += splitted_username.at(1);
+                    splitted_username = SplitString(username, "\", \"avatar\":");
+                    username.clear();
+                    username += splitted_username.at(0);
+                }
+                if (string::npos != username.find("bot") || string::npos != username.find("BOT")) { //if bot is a substring in username username => continue
 
 #ifdef DEBUG
     cout << "   - Message from bot, skipping..." << endl;
 #endif
 
-                        continue;
-                    }
-                    if (regex_search(splitted_messages.at(i), match, r_message_content)) {
-                        content += match[0];
-                        vector<string> splitted_content = SplitString(content, "\"content\": \"");
-                        content.clear();
-                        content += splitted_content.at(1);
-                        splitted_content = SplitString(content, "\", \"channel_id\":");
-                        content.clear();
-                        content += splitted_content.at(0);
-                    }
+                    continue;
+                }
+                if (regex_search(splitted_messages.at(i), match, r_message_content)) {
+                    content += match[0];
+                    vector<string> splitted_content = SplitString(content, "\"content\": \"");
+                    content.clear();
+                    content += splitted_content.at(1);
+                    splitted_content = SplitString(content, "\", \"channel_id\":");
+                    content.clear();
+                    content += splitted_content.at(0);
+                }
 
-                    if (flag_verbose)
-                        cout << "#isa-bot - " << username << ": " << content << endl;
+                if (flag_verbose)
+                    cout << "#isa-bot - " << username << ": " << content << endl;
 
-                    char json_message[512];
-                    memset(json_message, 0, sizeof(json_message));
-                    strcpy(json_message, "{\"content\": \"echo: ");
-                    strcat(json_message, username.c_str());
-                    strcat(json_message, " - ");
-                    strcat(json_message, content.c_str());
-                    strcat(json_message, "\"}");
+                char json_message[512];
+                memset(json_message, 0, sizeof(json_message));
+                strcpy(json_message, "{\"content\": \"echo: ");
+                strcat(json_message, username.c_str());
+                strcat(json_message, " - ");
+                strcat(json_message, content.c_str());
+                strcat(json_message, "\"}");
 
-                    char json_message_size[32];
-                    memset(json_message_size, 0, sizeof(json_message_size));
-                    sprintf(json_message_size, "%lu", strlen(json_message));
+                char json_message_size[32];
+                memset(json_message_size, 0, sizeof(json_message_size));
+                sprintf(json_message_size, "%lu", strlen(json_message));
 
-                    //echo the message
-                    memset(buffer_request, 0, sizeof(buffer_request));
+                //echo the message
+                memset(buffer_request, 0, sizeof(buffer_request));
 
-                    strcpy(buffer_request, "POST /api/v6/channels/");
-                    strcat(buffer_request, channel_id.c_str());
-                    strcat(buffer_request, "/messages HTTP/1.1\r\nHost: discord.com\r\nAuthorization: Bot ");
-                    strcat(buffer_request, access_token);
-                    strcat(buffer_request, "\r\nContent-Type: application/json");
-                    strcat(buffer_request, "\r\nContent-Length: ");
-                    strcat(buffer_request, json_message_size);
-                    strcat(buffer_request, "\r\n\r\n");
-                    strcat(buffer_request, json_message);
-                    strcat(buffer_request, "\r\n\r\n");
+                strcpy(buffer_request, "POST /api/v6/channels/");
+                strcat(buffer_request, channel_id.c_str());
+                strcat(buffer_request, "/messages HTTP/1.1\r\nHost: discord.com\r\nAuthorization: Bot ");
+                strcat(buffer_request, access_token);
+                strcat(buffer_request, "\r\nContent-Type: application/json");
+                strcat(buffer_request, "\r\nContent-Length: ");
+                strcat(buffer_request, json_message_size);
+                strcat(buffer_request, "\r\n\r\n");
+                strcat(buffer_request, json_message);
+                strcat(buffer_request, "\r\n\r\n");
 
-                    SSL_write(ssl, buffer_request, strlen(buffer_request));   /* encrypt & send message */
+                SSL_write(ssl, buffer_request, strlen(buffer_request));   /* encrypt & send message */
 
 #ifdef DEBUG
     cout << "   - Echo to message sent..." << endl;
 #endif
 
-                    SSL_read_answer(ssl, &received);
+                SSL_read_answer(ssl, &received);
 
 #ifdef DEBUG
     vector<string> HTTP_code = SplitString(received, "\r\n");
     cout << "   - Answer: " << HTTP_code.at(0) << endl;
 #endif
 
-                }
             }
-            usleep(SLEEP);
         }
-
-        SSL_free(ssl);        /* release connection state */
-
-#ifdef DEBUG
-    cout << endl << "* Connection released...";
-#endif
-
+        usleep(SLEEP);
     }
-    close(sock);         /* close socket */
+    Cleanup(ctx, sock, ssl);
 
 #ifdef DEBUG
-    cout << endl << "* Socket closed...";
-#endif
-
-    SSL_CTX_free(ctx);        /* release context */
-
-#ifdef DEBUG
-    cout << endl << "* Context released..." << endl << "* EXIT SUCCESS..." << endl;
+    cout << endl << "* CLEANUP..." << endl << "* EXIT SUCCESS..." << endl;
 #endif
 
     return EXIT_SUCCESS;
