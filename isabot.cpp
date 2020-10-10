@@ -4,6 +4,15 @@
 
 #include "isabot.hpp"
 
+static volatile sig_atomic_t keep_running = 1;
+
+bool flag_verbose = false;
+
+void SIGINTHandler(int)
+{
+    keep_running = 0;
+}
+
 void ErrExit(int errnum, const char* err)
 {
     if (strlen(err))
@@ -128,7 +137,7 @@ SSL_CTX* InitCTX()
     ctx = SSL_CTX_new(method);   /* Create new context */
     if (ctx == NULL) {
         ERR_print_errors_fp(stderr);
-        abort();
+        ErrExit(EXIT_FAILURE, "creating of new context failed");
     }
     return ctx;
 }
@@ -163,6 +172,8 @@ vector<string> SplitString(string str, string delimiter)
 
 int main(int argc, char** argv)
 {
+    signal(SIGINT, SIGINTHandler);
+
     /***** PARSING OF THE ARGUMENTS *****/
     char access_token[512];
     ParseOpt(argc, argv, access_token);
@@ -177,6 +188,7 @@ int main(int argc, char** argv)
     ssl = SSL_new(ctx);      /* create new SSL connection state */
     SSL_set_fd(ssl, sock);    /* attach the socket descriptor */
     if (SSL_connect(ssl) == -1) {   /* perform the connection */
+        SSL_free(ssl);
         close(sock);
         SSL_CTX_free(ctx);
         ERR_print_errors_fp(stderr);
@@ -288,7 +300,7 @@ int main(int argc, char** argv)
     cout << "   - \"isa-bot\" channel ID: " << channel_id << endl;
 #endif
 
-        while (true) {
+        while (keep_running) {
             memset(buffer_request, 0, sizeof(buffer_request));
 
             strcpy(buffer_request, "GET /api/v6/channels/");

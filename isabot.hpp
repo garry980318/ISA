@@ -18,6 +18,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <signal.h>
 
 #include <iostream>
 #include <string>
@@ -30,7 +31,10 @@ using namespace std;
 #define BUFFER 1024
 #define HTTPS 443
 
-bool flag_verbose = false;
+/**
+ * @brief
+ */
+void SIGINTHandler(int);
 
 /**
  * @brief
