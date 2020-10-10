@@ -133,7 +133,14 @@ SSL_CTX* InitCTX()
     SSL_CTX *ctx;
     OpenSSL_add_all_algorithms();  /* Load cryptos, et.al. */
     SSL_load_error_strings();   /* Bring in and register error messages */
-    method = TLS_client_method();  /* Create new client-method instance */
+
+    // if OpenSSL is prior version 1.1.x older client method is needed
+    #if (OPENSSL_VERSION_NUMBER < 0x010100000)
+        method = TLSv1_client_method();
+    #else
+        method = TLS_client_method();
+    #endif
+
     ctx = SSL_CTX_new(method);   /* Create new context */
     if (ctx == NULL) {
         ERR_print_errors_fp(stderr);
@@ -416,11 +423,6 @@ int main(int argc, char** argv)
 #endif
 
                 }
-            } else {
-                SSL_free(ssl);
-                close(sock);
-                SSL_CTX_free(ctx);
-                ErrExit(EXIT_FAILURE, "Unknown error, please contact the autor: xgrenc00@stud.fit.vutbr.cz");
             }
             usleep(5000000); // sleep for 5 seconds
         }
@@ -428,14 +430,14 @@ int main(int argc, char** argv)
         SSL_free(ssl);        /* release connection state */
 
 #ifdef DEBUG
-    cout << endl << "* Connection released..." << endl;
+    cout << endl << "* Connection released...";
 #endif
 
     }
     close(sock);         /* close socket */
 
 #ifdef DEBUG
-    cout << endl << "* Socket closed..." << endl;
+    cout << endl << "* Socket closed...";
 #endif
 
     SSL_CTX_free(ctx);        /* release context */
