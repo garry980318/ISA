@@ -134,7 +134,7 @@ SSL_CTX* InitCTX()
     OpenSSL_add_all_algorithms();  /* Load cryptos, et.al. */
     SSL_load_error_strings();   /* Bring in and register error messages */
 
-    // if OpenSSL is prior version 1.1.x older client method is needed
+    // if OpenSSL is prior version 1.1.x, older client method is needed
     #if (OPENSSL_VERSION_NUMBER < 0x010100000)
         method = TLSv1_client_method();
     #else
@@ -331,8 +331,8 @@ int main(int argc, char** argv)
 
             if (regex_search(received, match, r_messages)) {
                 all_messages += match[0];
-                if (all_messages.compare("\n[]") == 0) {
-                    usleep(5000000);
+                if (all_messages.compare("\n[]") == 0) { // no new messages
+                    usleep(SLEEP);
                     continue;
                 }
 
@@ -363,10 +363,10 @@ int main(int argc, char** argv)
                         username.clear();
                         username += splitted_username.at(0);
                     }
-                    if (string::npos != username.find("bot")) { //if bot is a substring in username username => continue
+                    if (string::npos != username.find("bot") || string::npos != username.find("BOT")) { //if bot is a substring in username username => continue
 
 #ifdef DEBUG
-    cout << endl << "* Message from bot, skipping..." << endl;
+    cout << "   - Message from bot, skipping..." << endl;
 #endif
 
                         continue;
@@ -419,12 +419,13 @@ int main(int argc, char** argv)
                     SSL_read_answer(ssl, &received);
 
 #ifdef DEBUG
-    cout << endl << "* Answer:\n" << endl << received << endl;
+    vector<string> HTTP_code = SplitString(received, "\r\n");
+    cout << "   - Answer: " << HTTP_code.at(0) << endl;
 #endif
 
                 }
             }
-            usleep(5000000); // sleep for 5 seconds
+            usleep(SLEEP);
         }
 
         SSL_free(ssl);        /* release connection state */

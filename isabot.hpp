@@ -30,6 +30,8 @@ using namespace std;
 
 #define BUFFER 1024
 #define HTTPS 443
+// sleep for 3 seconds
+#define SLEEP 3000000
 
 /**
  * @brief
