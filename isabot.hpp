@@ -54,29 +54,29 @@ void ParseOpt(int argc, char** argv, char* access_token);
 void PrintHelp();
 
 /**
- * @brief
- */
-bool OpenConnection(int *sock, const char* hostname, int port);
-
-/**
- * @brief
- */
+* @brief
+*/
 SSL_CTX* InitCTX();
 
 /**
  * @brief
  */
-void SSL_read_answer(SSL *ssl, string *received);
+const char* OpenConnection(int *sock, const char* hostname, int port);
+
+/**
+ * @brief
+ */
+void SSLReadAnswer(SSL *ssl, string *received);
+
+/**
+* @brief
+*/
+void Cleanup(SSL_CTX *ctx, int *sock, SSL *ssl);
 
 /**
  * @brief
  */
 vector<string> SplitString(string str, string delimiter);
-
-/**
- * @brief
- */
-void Cleanup(SSL_CTX *ctx, int sock, SSL *ssl);
 
 #endif
 /*** End of file isabot.hpp ***/
