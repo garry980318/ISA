@@ -2,8 +2,8 @@
  * @author Radoslav Grenčík, xgrenc00@stud.fit.vutbr.cz
  */
 
-#ifndef LIST_H_
-#define LIST_H_
+#ifndef ISABOT_HPP_
+#define ISABOT_HPP_
 
 #include <arpa/inet.h>
 #include <getopt.h>
