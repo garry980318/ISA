@@ -9,20 +9,20 @@
 #include <getopt.h>
 #include <netdb.h>
 #include <netinet/in.h>
-#include <openssl/ssl.h>
 #include <openssl/err.h>
+#include <openssl/ssl.h>
 #include <pwd.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include <signal.h>
 
 #include <iostream>
-#include <string>
 #include <regex>
+#include <string>
 #include <vector>
 using namespace std;
 
@@ -61,17 +61,17 @@ SSL_CTX* InitCTX();
 /**
  * @brief
  */
-const char* OpenConnection(int *sock, const char* hostname, int port);
+const char* OpenConnection(int* sock, const char* hostname, int port);
 
 /**
  * @brief
  */
-void SSLReadAnswer(SSL *ssl, string *received);
+void SSLReadAnswer(SSL* ssl, string* received);
 
 /**
 * @brief
 */
-void Cleanup(SSL_CTX *ctx, int *sock, SSL *ssl);
+void Cleanup(SSL_CTX* ctx, int* sock, SSL* ssl);
 
 /**
  * @brief

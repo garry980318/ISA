@@ -87,20 +87,20 @@ void PrintHelp()
 
 SSL_CTX* InitCTX()
 {
-    SSL_load_error_strings();   /* Bring in and register error messages */
+    SSL_load_error_strings(); /* Bring in and register error messages */
     SSL_library_init();
-    OpenSSL_add_all_algorithms();  /* Load cryptos, et.al. */
+    OpenSSL_add_all_algorithms(); /* Load cryptos, et.al. */
 
-    const SSL_METHOD *method;
-    // if OpenSSL is prior version 1.1.x, older client method is needed
-    #if (OPENSSL_VERSION_NUMBER < 0x010100000)
-        method = TLSv1_client_method();
-    #else
-        method = TLS_client_method();
-    #endif
+    const SSL_METHOD* method;
+// if OpenSSL is prior version 1.1.x, older client method is needed
+#if (OPENSSL_VERSION_NUMBER < 0x010100000)
+    method = TLSv1_client_method();
+#else
+    method = TLS_client_method();
+#endif
 
-    SSL_CTX *ctx;
-    ctx = SSL_CTX_new(method);   /* Create new context */
+    SSL_CTX* ctx;
+    ctx = SSL_CTX_new(method); /* Create new context */
     if (ctx == NULL) {
         ERR_print_errors_fp(stderr);
         EVP_cleanup();
@@ -110,7 +110,7 @@ SSL_CTX* InitCTX()
     return ctx;
 }
 
-const char* OpenConnection(int *sock, const char* hostname, int port)
+const char* OpenConnection(int* sock, const char* hostname, int port)
 {
     struct sockaddr_in server;
     memset(&server, 0, sizeof(server));
@@ -122,12 +122,12 @@ const char* OpenConnection(int *sock, const char* hostname, int port)
     timeout.tv_sec = 1;
     timeout.tv_usec = 0;
 
-    if (setsockopt (*sock, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
+    if (setsockopt(*sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout)) < 0) {
         close(*sock);
         return "setsockopt() failed";
     }
 
-    if (setsockopt (*sock, SOL_SOCKET, SO_SNDTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
+    if (setsockopt(*sock, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout, sizeof(timeout)) < 0) {
         close(*sock);
         return "setsockopt() failed";
     }
@@ -151,21 +151,21 @@ const char* OpenConnection(int *sock, const char* hostname, int port)
     return "";
 }
 
-void SSLReadAnswer(SSL *ssl, string *received)
+void SSLReadAnswer(SSL* ssl, string* received)
 {
     int bytes = 0;
     char buffer_answer[BUFFER];
     memset(buffer_answer, 0, sizeof(buffer_answer));
 
     received->clear();
-    while(bytes != -1) {
+    while (bytes != -1) {
         bytes = SSL_read(ssl, buffer_answer, sizeof(buffer_answer) - 1); /* get reply & decrypt */
         *received += buffer_answer;
         memset(buffer_answer, 0, sizeof(buffer_answer));
     }
 }
 
-void Cleanup(SSL_CTX *ctx, int *sock, SSL *ssl)
+void Cleanup(SSL_CTX* ctx, int* sock, SSL* ssl)
 {
     SSL_free(ssl); // release connection state
     close(*sock); // close socket
@@ -197,9 +197,9 @@ int main(int argc, char** argv)
     memset(access_token, 0, sizeof(access_token));
     ParseOpt(argc, argv, access_token);
 
-    SSL_CTX *ctx;
+    SSL_CTX* ctx;
     int sock;
-    SSL *ssl;
+    SSL* ssl;
 
     ctx = InitCTX();
     const char* socket_error = OpenConnection(&sock, "discord.com", HTTPS);
@@ -209,13 +209,13 @@ int main(int argc, char** argv)
         ERR_free_strings();
         ErrExit(EXIT_FAILURE, socket_error);
     }
-    ssl = SSL_new(ctx);      /* create new SSL connection state */
-    if (SSL_set_fd(ssl, sock) == 0) {    /* attach the socket descriptor */
+    ssl = SSL_new(ctx); /* create new SSL connection state */
+    if (SSL_set_fd(ssl, sock) == 0) { /* attach the socket descriptor */
         ERR_print_errors_fp(stderr);
         Cleanup(ctx, &sock, ssl);
         ErrExit(EXIT_FAILURE, "SSL_set_fd() failed");
     }
-    if (SSL_connect(ssl) == -1) {   /* perform the connection */
+    if (SSL_connect(ssl) == -1) { /* perform the connection */
         ERR_print_errors_fp(stderr);
         Cleanup(ctx, &sock, ssl);
         ErrExit(EXIT_FAILURE, "SSL_connect() failed");
@@ -233,11 +233,12 @@ int main(int argc, char** argv)
     strcat(buffer_request, access_token);
     strcat(buffer_request, "\r\n\r\n");
 
-    SSL_write(ssl, buffer_request, strlen(buffer_request));   /* encrypt & send message */
+    SSL_write(ssl, buffer_request, strlen(buffer_request)); /* encrypt & send message */
     SSLReadAnswer(ssl, &received);
 
 #ifdef DEBUG
-    cout << endl << "* Bot guilds received..." << endl;
+    cout << endl
+         << "* Bot guilds received..." << endl;
 #endif
 
     const regex r_id_whole("(\"id\": \"[0-9]+\")");
@@ -278,11 +279,12 @@ int main(int argc, char** argv)
     strcat(buffer_request, access_token);
     strcat(buffer_request, "\r\n\r\n");
 
-    SSL_write(ssl, buffer_request, strlen(buffer_request));   /* encrypt & send message */
+    SSL_write(ssl, buffer_request, strlen(buffer_request)); /* encrypt & send message */
     SSLReadAnswer(ssl, &received);
 
 #ifdef DEBUG
-    cout << endl << "* Guild channels received..." << endl;
+    cout << endl
+         << "* Guild channels received..." << endl;
 #endif
 
     string channel;
@@ -328,11 +330,12 @@ int main(int argc, char** argv)
         strcat(buffer_request, access_token);
         strcat(buffer_request, "\r\n\r\n");
 
-        SSL_write(ssl, buffer_request, strlen(buffer_request));   /* encrypt & send message */
+        SSL_write(ssl, buffer_request, strlen(buffer_request)); /* encrypt & send message */
         SSLReadAnswer(ssl, &received);
 
 #ifdef DEBUG
-    cout << endl << "* Trying to receive new messages..." << endl;
+        cout << endl
+             << "* Trying to receive new messages..." << endl;
 #endif
 
         string all_messages;
@@ -348,7 +351,7 @@ int main(int argc, char** argv)
         }
 
 #ifdef DEBUG
-    cout << "   - New messages received..." << endl;
+        cout << "   - New messages received..." << endl;
 #endif
 
         vector<string> splitted_messages = SplitString(all_messages, "}, {");
@@ -377,7 +380,7 @@ int main(int argc, char** argv)
             if (string::npos != username.find("bot") || string::npos != username.find("BOT")) { //if bot is a substring in username username => continue
 
 #ifdef DEBUG
-    cout << "   - Message from bot, skipping..." << endl;
+                cout << "   - Message from bot, skipping..." << endl;
 #endif
 
                 continue;
@@ -421,26 +424,27 @@ int main(int argc, char** argv)
             strcat(buffer_request, json_message);
             strcat(buffer_request, "\r\n\r\n");
 
-            SSL_write(ssl, buffer_request, strlen(buffer_request));   /* encrypt & send message */
+            SSL_write(ssl, buffer_request, strlen(buffer_request)); /* encrypt & send message */
 
 #ifdef DEBUG
-    cout << "   - Echo to message sent..." << endl;
+            cout << "   - Echo to message sent..." << endl;
 #endif
 
             SSLReadAnswer(ssl, &received);
 
 #ifdef DEBUG
-    vector<string> HTTP_code = SplitString(received, "\r\n");
-    cout << "   - Answer: " << HTTP_code.at(0) << endl;
+            vector<string> HTTP_code = SplitString(received, "\r\n");
+            cout << "   - Answer: " << HTTP_code.at(0) << endl;
 #endif
-
         }
         usleep(SLEEP);
     }
     Cleanup(ctx, &sock, ssl);
 
 #ifdef DEBUG
-    cout << endl << "* CLEANUP..." << endl << "* EXIT SUCCESS..." << endl;
+    cout << endl
+         << "* CLEANUP..." << endl
+         << "* EXIT SUCCESS..." << endl;
 #endif
 
     return EXIT_SUCCESS;
