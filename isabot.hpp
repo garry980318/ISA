@@ -24,6 +24,7 @@
 #include <regex>
 #include <string>
 #include <vector>
+
 using namespace std;
 
 #define BAD_OPTIONS 99
@@ -54,8 +55,8 @@ void ParseOpt(int argc, char** argv, char* access_token);
 void PrintHelp();
 
 /**
-* @brief
-*/
+ * @brief
+ */
 SSL_CTX* InitCTX();
 
 /**
@@ -69,9 +70,14 @@ const char* OpenConnection(int* sock, const char* hostname, int port);
 void SSLReadAnswer(SSL* ssl, string* received);
 
 /**
-* @brief
-*/
+ * @brief
+ */
 void Cleanup(SSL_CTX* ctx, int* sock, SSL* ssl);
+
+/**
+ * @brief
+ */
+bool IsWhiteSpaceOrEmpty(const string& s);
 
 /**
  * @brief
