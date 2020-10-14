@@ -436,7 +436,7 @@ int main(int argc, char** argv)
             }
 
             if (flag_verbose)
-                cout << "#isa-bot - " << username << ": " << content << endl;
+                cout << "isa-bot - " << username << ": " << content << endl;
 
             char json_message[512];
             memset(json_message, 0, sizeof(json_message));
