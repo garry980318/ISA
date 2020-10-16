@@ -42,7 +42,7 @@ void SIGINTHandler(int);
 /**
  * @brief
  */
-void ErrExit(int errnum, const char* err);
+void ErrExit(int errnum, string err);
 
 /**
  * @brief
@@ -62,12 +62,12 @@ SSL_CTX* InitCTX();
 /**
  * @brief
  */
-const char* OpenConnection(int* sock, const char* hostname, int port);
+string OpenConnection(int* sock, const char* hostname, int port);
 
 /**
  * @brief
  */
-void SSLReadAnswer(SSL* ssl, string* received);
+string SSLReadAnswer(SSL* ssl, string* received);
 
 /**
  * @brief
@@ -83,6 +83,11 @@ bool IsWhiteSpaceOrEmpty(const string& s);
  * @brief
  */
 vector<string> SplitString(string str, string delimiter);
+
+/**
+ * @brief
+ */
+vector<string> SplitArrayOfJSON(string array);
 
 #endif
 /*** End of file isabot.hpp ***/
