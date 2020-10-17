@@ -180,9 +180,23 @@ void Cleanup(SSL_CTX* ctx, int* sock, SSL* ssl)
     ERR_free_strings();
 }
 
-bool IsWhiteSpaceOrEmpty(const string& s)
+string ToLower(string str)
 {
-    return all_of(s.begin(), s.end(), [](unsigned char c) { return isspace(c); });
+    string lower_str;
+    for (unsigned int i = 0; i < str.size(); i++)
+        lower_str += tolower(str[i]);
+    return lower_str;
+}
+
+bool IsWhiteSpaceOrEmpty(string str)
+{
+    if (str.size() == 0) // string is empty => true
+        return true;
+    for (unsigned int i = 0; i < str.size(); i++) {
+        if (isspace(str[i]) == 0) // string now contains one NON-whitespace => false
+            return false;
+    }
+    return true; // string contains only whitespaces => true
 }
 
 vector<string> SplitString(string str, string delimiter)
@@ -210,7 +224,7 @@ vector<string> SplitArrayOfJSON(string array)
     string token;
     vector<string> list;
 
-    for (size_t i = 0; i < array.size(); i++)
+    for (unsigned int i = 0; i < array.size(); i++)
         if (array[i] == '{' || array[i] == '}')
             num_of_brackets++;
 
@@ -250,7 +264,6 @@ int main(int argc, char** argv)
 {
     signal(SIGINT, SIGINTHandler);
 
-    /***** PARSING OF THE ARGUMENTS *****/
     char access_token[512];
     memset(access_token, 0, sizeof(access_token));
     ParseOpt(argc, argv, access_token);
@@ -389,6 +402,10 @@ int main(int argc, char** argv)
 #endif
     }
 
+#ifdef DEBUG
+    unsigned long long int request_counter = 0;
+#endif
+
     while (true) {
         if (!keep_running)
             break;
@@ -412,7 +429,7 @@ int main(int argc, char** argv)
 
 #ifdef DEBUG
         cout << endl
-             << "* Trying to receive new messages from \"isa-bot\" channel..." << endl;
+             << "* Trying to receive new messages from \"isa-bot\" channel...Request No." << ++request_counter << endl;
 #endif
 
         string all_messages;
@@ -480,7 +497,7 @@ int main(int argc, char** argv)
                 username += splitted_username.at(0);
             }
 
-            if (string::npos != username.find("bot") || string::npos != username.find("BOT")) { //if bot is a substring in username username => continue
+            if (ToLower(username).find("bot") != string::npos) { // if bot is a substring in username => continue (CASE INSENSITIVE)
 #ifdef DEBUG
                 cout << "isa-bot - Message from bot, skipping..." << endl;
 #endif
@@ -538,7 +555,7 @@ int main(int argc, char** argv)
                 content += attachment;
             }
 
-            //send echo to received message
+            // send echo to received message
             char json_message[512];
             memset(json_message, 0, sizeof(json_message));
             strcpy(json_message, "{\"content\": \"echo: ");

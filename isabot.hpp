@@ -6,6 +6,7 @@
 #define ISABOT_HPP_
 
 #include <arpa/inet.h>
+#include <ctype.h>
 #include <getopt.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -77,7 +78,12 @@ void Cleanup(SSL_CTX* ctx, int* sock, SSL* ssl);
 /**
  * @brief
  */
-bool IsWhiteSpaceOrEmpty(const string& s);
+string ToLower(string str);
+
+/**
+ * @brief
+ */
+bool IsWhiteSpaceOrEmpty(string str);
 
 /**
  * @brief
