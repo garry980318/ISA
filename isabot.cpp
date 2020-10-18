@@ -155,7 +155,6 @@ string SSLReadAnswer(SSL* ssl, string* received)
 {
     int bytes = 0;
     char buffer_answer[BUFFER];
-    memset(buffer_answer, 0, sizeof(buffer_answer));
 
     received->clear();
     while (bytes != -1) {
@@ -265,7 +264,6 @@ int main(int argc, char** argv)
     signal(SIGINT, SIGINTHandler);
 
     char access_token[512];
-    memset(access_token, 0, sizeof(access_token));
     ParseOpt(argc, argv, access_token);
 
     SSL_CTX* ctx;
@@ -314,8 +312,6 @@ int main(int argc, char** argv)
     smatch match;
 
     if (keep_running) {
-        memset(buffer_request, 0, sizeof(buffer_request));
-
         strcpy(buffer_request, "GET /api/v6/users/@me/guilds HTTP/1.1\r\nHost: discord.com\r\nAuthorization: Bot ");
         strcat(buffer_request, access_token);
         strcat(buffer_request, "\r\n\r\n");
@@ -406,9 +402,26 @@ int main(int argc, char** argv)
     unsigned long long int request_counter = 0;
 #endif
 
+    string all_messages;
+    string username;
+    string content;
+    string attachment;
+    vector<string> received_body;
+    vector<string> splitted_messages;
+    vector<string> splitted_username;
+    vector<string> splitted_content;
+    vector<string> splitted_url;
+    char json_message[512];
+    char json_message_size[32];
+
     while (true) {
         if (!keep_running)
             break;
+
+        all_messages.clear();
+        username.clear();
+        content.clear();
+        attachment.clear();
 
         memset(buffer_request, 0, sizeof(buffer_request));
 
@@ -432,12 +445,7 @@ int main(int argc, char** argv)
              << "* Trying to receive new messages from \"isa-bot\" channel...Request No." << ++request_counter << endl;
 #endif
 
-        string all_messages;
-        string username;
-        string content;
-        string attachment;
-
-        vector<string> received_body = SplitString(received, "\r\n\r\n");
+        received_body = SplitString(received, "\r\n\r\n");
         if (received_body.size() != 2) {
             Cleanup(ctx, &sock, ssl);
             ErrExit(EXIT_FAILURE, "bad answer from server");
@@ -451,7 +459,7 @@ int main(int argc, char** argv)
             continue;
         }
 
-        vector<string> splitted_messages = SplitArrayOfJSON(all_messages);
+        splitted_messages = SplitArrayOfJSON(all_messages);
         if (splitted_messages.size() < 1) {
             Cleanup(ctx, &sock, ssl);
             ErrExit(EXIT_FAILURE, "bad answer from server");
@@ -480,7 +488,7 @@ int main(int argc, char** argv)
 
             if (regex_search(splitted_messages.at(i), match, r_message_username)) {
                 username += match[0];
-                vector<string> splitted_username = SplitString(username, "\", \"avatar\":");
+                splitted_username = SplitString(username, "\", \"avatar\":");
                 if (splitted_username.size() < 1) {
                     Cleanup(ctx, &sock, ssl);
                     ErrExit(EXIT_FAILURE, "bad answer from server");
@@ -506,7 +514,7 @@ int main(int argc, char** argv)
 
             if (regex_search(splitted_messages.at(i), match, r_message_content)) {
                 content += match[0];
-                vector<string> splitted_content = SplitString(content, "\"content\": \"");
+                splitted_content = SplitString(content, "\"content\": \"");
                 if (splitted_content.size() != 1) {
                     Cleanup(ctx, &sock, ssl);
                     ErrExit(EXIT_FAILURE, "bad answer from server");
@@ -534,7 +542,7 @@ int main(int argc, char** argv)
 
             if (regex_search(splitted_messages.at(i), match, r_message_url)) {
                 attachment += match[0];
-                vector<string> splitted_url = SplitString(attachment, "\"url\": \"");
+                splitted_url = SplitString(attachment, "\"url\": \"");
                 if (splitted_url.size() != 1) {
                     Cleanup(ctx, &sock, ssl);
                     ErrExit(EXIT_FAILURE, "bad answer from server");
@@ -556,7 +564,6 @@ int main(int argc, char** argv)
             }
 
             // send echo to received message
-            char json_message[512];
             memset(json_message, 0, sizeof(json_message));
             strcpy(json_message, "{\"content\": \"echo: ");
             strcat(json_message, username.c_str());
@@ -564,7 +571,6 @@ int main(int argc, char** argv)
             strcat(json_message, content.c_str());
             strcat(json_message, "\"}");
 
-            char json_message_size[32];
             memset(json_message_size, 0, sizeof(json_message_size));
             sprintf(json_message_size, "%lu", strlen(json_message));
 
