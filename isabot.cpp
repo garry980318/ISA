@@ -119,8 +119,8 @@ string OpenConnection(int* sock, const char* hostname, int port)
         return "socket() failed";
 
     struct timeval timeout;
-    timeout.tv_sec = 1;
-    timeout.tv_usec = 0;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 500000; // timeot for receiving and sending is 0,5s
 
     if (setsockopt(*sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout)) < 0) {
         close(*sock);
@@ -155,15 +155,16 @@ string SSLReadAnswer(SSL* ssl, string* received)
 {
     int bytes = 0;
     char buffer_answer[BUFFER];
+    vector<string> HTTP_code;
 
     received->clear();
     while (bytes != -1) {
+        memset(buffer_answer, 0, sizeof(buffer_answer));
         bytes = SSL_read(ssl, buffer_answer, sizeof(buffer_answer) - 1); /* get reply & decrypt */
         *received += buffer_answer;
-        memset(buffer_answer, 0, sizeof(buffer_answer));
     }
 
-    vector<string> HTTP_code = SplitString(*received, "\r\n");
+    HTTP_code = SplitString(*received, "\r\n");
     if (HTTP_code.size() < 1)
         return "bad answer from server";
 
