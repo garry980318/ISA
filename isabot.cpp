@@ -119,8 +119,8 @@ string OpenConnection(int* sock, const char* hostname, int port)
         return "socket() failed";
 
     struct timeval timeout;
-    timeout.tv_sec = 0;
-    timeout.tv_usec = 500000; // timeot for receiving and sending is 0,5s
+    timeout.tv_sec = 1; // timeot for receiving and sending is 1s
+    timeout.tv_usec = 0;
 
     if (setsockopt(*sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout)) < 0) {
         close(*sock);
@@ -164,7 +164,7 @@ string SSLReadAnswer(SSL* ssl, string* received)
         *received += buffer_answer;
     }
 
-    HTTP_code = SplitString(*received, "\r\n");
+    SplitString(*received, "\r\n", &HTTP_code);
     if (HTTP_code.size() < 1)
         return "bad answer from server";
 
@@ -199,30 +199,32 @@ bool IsWhiteSpaceOrEmpty(string str)
     return true; // string contains only whitespaces => true
 }
 
-vector<string> SplitString(string str, string delimiter)
+void SplitString(string str, string delimiter, vector<string>* list)
 {
     size_t position = 0;
     string token;
-    vector<string> list;
+    list->clear();
+    vector<string>(*list).swap(*list);
+
     while ((position = str.find(delimiter)) != string::npos) {
         token = str.substr(0, position);
         if (IsWhiteSpaceOrEmpty(token) == false)
-            list.push_back(token);
+            list->push_back(token);
         str.erase(0, position + delimiter.size());
     }
     if (IsWhiteSpaceOrEmpty(str) == false)
-        list.push_back(str);
-    return list;
+        list->push_back(str);
 }
 
-vector<string> SplitArrayOfJSON(string array)
+void SplitArrayOfJSON(string array, vector<string>* list)
 {
     unsigned int num_of_brackets = 0;
     unsigned int l_counter = 0;
     unsigned int r_counter = 0;
     size_t position = 0;
     string token;
-    vector<string> list;
+    list->clear();
+    vector<string>(*list).swap(*list);
 
     for (unsigned int i = 0; i < array.size(); i++)
         if (array[i] == '{' || array[i] == '}')
@@ -247,7 +249,7 @@ vector<string> SplitArrayOfJSON(string array)
             position++;
             token = array.substr(0, position);
             if (IsWhiteSpaceOrEmpty(token) == false)
-                list.push_back(token);
+                list->push_back(token);
             if (l_counter + r_counter == num_of_brackets)
                 break;
             array.erase(0, position);
@@ -256,8 +258,6 @@ vector<string> SplitArrayOfJSON(string array)
         }
         position++;
     }
-
-    return list;
 }
 
 int main(int argc, char** argv)
@@ -446,7 +446,7 @@ int main(int argc, char** argv)
              << "* Trying to receive new messages from \"isa-bot\" channel...Request No." << ++request_counter << endl;
 #endif
 
-        received_body = SplitString(received, "\r\n\r\n");
+        SplitString(received, "\r\n\r\n", &received_body);
         if (received_body.size() != 2) {
             Cleanup(ctx, &sock, ssl);
             ErrExit(EXIT_FAILURE, "bad answer from server");
@@ -454,13 +454,10 @@ int main(int argc, char** argv)
         all_messages += received_body.at(1);
 
         if (all_messages.compare("[]") == 0) { // no new messages
-            if (!keep_running)
-                break;
-            usleep(SLEEP);
             continue;
         }
 
-        splitted_messages = SplitArrayOfJSON(all_messages);
+        SplitArrayOfJSON(all_messages, &splitted_messages);
         if (splitted_messages.size() < 1) {
             Cleanup(ctx, &sock, ssl);
             ErrExit(EXIT_FAILURE, "bad answer from server");
@@ -489,7 +486,7 @@ int main(int argc, char** argv)
 
             if (regex_search(splitted_messages.at(i), match, r_message_username)) {
                 username += match[0];
-                splitted_username = SplitString(username, "\", \"avatar\":");
+                SplitString(username, "\", \"avatar\":", &splitted_username);
                 if (splitted_username.size() < 1) {
                     Cleanup(ctx, &sock, ssl);
                     ErrExit(EXIT_FAILURE, "bad answer from server");
@@ -497,7 +494,7 @@ int main(int argc, char** argv)
                 username.clear();
                 username += splitted_username.at(0);
 
-                splitted_username = SplitString(username, "\"username\": \"");
+                SplitString(username, "\"username\": \"", &splitted_username);
                 if (splitted_username.size() != 1) {
                     Cleanup(ctx, &sock, ssl);
                     ErrExit(EXIT_FAILURE, "bad answer from server");
@@ -515,7 +512,7 @@ int main(int argc, char** argv)
 
             if (regex_search(splitted_messages.at(i), match, r_message_content)) {
                 content += match[0];
-                splitted_content = SplitString(content, "\"content\": \"");
+                SplitString(content, "\"content\": \"", &splitted_content);
                 if (splitted_content.size() != 1) {
                     Cleanup(ctx, &sock, ssl);
                     ErrExit(EXIT_FAILURE, "bad answer from server");
@@ -523,7 +520,7 @@ int main(int argc, char** argv)
                 content.clear();
                 content += splitted_content.at(0);
 
-                splitted_content = SplitString(content, "\", \"channel_id\":");
+                SplitString(content, "\", \"channel_id\":", &splitted_content);
                 content.clear();
                 switch (splitted_content.size()) {
                 case 0:
@@ -543,7 +540,7 @@ int main(int argc, char** argv)
 
             if (regex_search(splitted_messages.at(i), match, r_message_url)) {
                 attachment += match[0];
-                splitted_url = SplitString(attachment, "\"url\": \"");
+                SplitString(attachment, "\"url\": \"", &splitted_url);
                 if (splitted_url.size() != 1) {
                     Cleanup(ctx, &sock, ssl);
                     ErrExit(EXIT_FAILURE, "bad answer from server");
@@ -551,7 +548,7 @@ int main(int argc, char** argv)
                 attachment.clear();
                 attachment += splitted_url.at(0);
 
-                splitted_url = SplitString(attachment, "\", \"proxy_url\":");
+                SplitString(attachment, "\", \"proxy_url\":", &splitted_url);
                 if (splitted_url.size() != 1) {
                     Cleanup(ctx, &sock, ssl);
                     ErrExit(EXIT_FAILURE, "bad answer from server");
@@ -604,9 +601,6 @@ int main(int argc, char** argv)
             cout << "   - Answer: " << HTTP_code << endl;
 #endif
         }
-        if (!keep_running)
-            break;
-        usleep(SLEEP);
     }
     Cleanup(ctx, &sock, ssl);
 

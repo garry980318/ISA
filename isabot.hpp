@@ -32,8 +32,6 @@ using namespace std;
 
 #define BUFFER 1024
 #define HTTPS 443
-// sleep for 2 seconds
-#define SLEEP 2000000
 
 /**
  * @brief
@@ -88,12 +86,14 @@ bool IsWhiteSpaceOrEmpty(string str);
 /**
  * @brief
  */
-vector<string> SplitString(string str, string delimiter);
+// vector<string> SplitString(string str, string delimiter);
+void SplitString(string str, string delimiter, vector<string>* list);
 
 /**
  * @brief
  */
-vector<string> SplitArrayOfJSON(string array);
+// vector<string> SplitArrayOfJSON(string array);
+void SplitArrayOfJSON(string array, vector<string>* list);
 
 #endif
 /*** End of file isabot.hpp ***/
