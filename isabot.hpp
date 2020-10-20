@@ -30,7 +30,7 @@ using namespace std;
 
 #define BAD_OPTIONS 99
 
-#define BUFFER 1024
+#define BUFFER 8192 // 8KB
 #define HTTPS 443
 
 /**
@@ -66,7 +66,12 @@ string OpenConnection(int* sock, const char* hostname, int port);
 /**
  * @brief
  */
-string SSLReadAnswer(SSL* ssl, string* received);
+void SSLReadAnswer(SSL* ssl, string* received, string* return_str);
+
+/**
+ * @brief
+ */
+void Startup(SSL_CTX** ctx, int* sock, SSL** ssl);
 
 /**
  * @brief
@@ -86,13 +91,11 @@ bool IsWhiteSpaceOrEmpty(string str);
 /**
  * @brief
  */
-// vector<string> SplitString(string str, string delimiter);
 void SplitString(string str, string delimiter, vector<string>* list);
 
 /**
  * @brief
  */
-// vector<string> SplitArrayOfJSON(string array);
 void SplitArrayOfJSON(string array, vector<string>* list);
 
 #endif

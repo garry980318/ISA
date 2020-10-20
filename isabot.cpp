@@ -5,7 +5,7 @@
 #include "isabot.hpp"
 
 static volatile sig_atomic_t keep_running = 1;
-
+static bool restart_needed = false;
 bool flag_verbose = false;
 
 void SIGINTHandler(int)
@@ -92,12 +92,7 @@ SSL_CTX* InitCTX()
     OpenSSL_add_all_algorithms(); /* Load cryptos, et.al. */
 
     const SSL_METHOD* method;
-// if OpenSSL is prior version 1.1.x, older client method is needed
-#if (OPENSSL_VERSION_NUMBER < 0x010100000)
-    method = TLSv1_client_method();
-#else
-    method = TLS_client_method();
-#endif
+    method = SSLv23_client_method();
 
     SSL_CTX* ctx;
     ctx = SSL_CTX_new(method); /* Create new context */
@@ -151,24 +146,71 @@ string OpenConnection(int* sock, const char* hostname, int port)
     return "";
 }
 
-string SSLReadAnswer(SSL* ssl, string* received)
+void SSLReadAnswer(SSL* ssl, string* received, string* return_str)
 {
-    int bytes = 0;
+    int bytes;
     char buffer_answer[BUFFER];
-    vector<string> HTTP_code;
-
+    vector<string> answer;
     received->clear();
-    while (bytes != -1) {
+    return_str->clear();
+
+    bool loop = true;
+    while (loop) {
         memset(buffer_answer, 0, sizeof(buffer_answer));
         bytes = SSL_read(ssl, buffer_answer, sizeof(buffer_answer) - 1); /* get reply & decrypt */
         *received += buffer_answer;
+
+        if (bytes <= 0) {
+            switch (SSL_get_error(ssl, bytes)) {
+            case SSL_ERROR_NONE:
+            case SSL_ERROR_ZERO_RETURN:
+            case SSL_ERROR_WANT_READ:
+            case SSL_ERROR_WANT_WRITE:
+                loop = false;
+                break;
+            case SSL_ERROR_SYSCALL:
+            case SSL_ERROR_SSL:
+                restart_needed = true;
+                loop = false;
+                break;
+            default:
+                *return_str += "UNKNOWN ERROR";
+                return;
+            }
+        }
     }
 
-    SplitString(*received, "\r\n", &HTTP_code);
-    if (HTTP_code.size() < 1)
-        return "bad answer from server";
+    SplitString(*received, "\r\n", &answer);
+    if (answer.size() < 1)
+        *return_str += "bad answer from server";
+    else
+        *return_str += answer.at(0);
+}
 
-    return HTTP_code.at(0);
+void Startup(SSL_CTX** ctx, int* sock, SSL** ssl)
+{
+    string socket_error;
+
+    *ctx = InitCTX();
+    socket_error = OpenConnection(sock, "discord.com", HTTPS);
+    if (socket_error.size()) {
+        SSL_CTX_free(*ctx);
+        EVP_cleanup();
+        ERR_free_strings();
+        ErrExit(EXIT_FAILURE, socket_error);
+    }
+    *ssl = SSL_new(*ctx); /* create new SSL connection state */
+    SSL_set_connect_state(*ssl);
+    if (SSL_set_fd(*ssl, *sock) == 0) { /* attach the socket descriptor */
+        ERR_print_errors_fp(stderr);
+        Cleanup(*ctx, sock, *ssl);
+        ErrExit(EXIT_FAILURE, "SSL_set_fd() failed");
+    }
+    if (SSL_connect(*ssl) == -1) { /* perform the connection */
+        ERR_print_errors_fp(stderr);
+        Cleanup(*ctx, sock, *ssl);
+        ErrExit(EXIT_FAILURE, "SSL_connect() failed");
+    }
 }
 
 void Cleanup(SSL_CTX* ctx, int* sock, SSL* ssl)
@@ -270,26 +312,7 @@ int main(int argc, char** argv)
     SSL_CTX* ctx;
     int sock;
     SSL* ssl;
-
-    ctx = InitCTX();
-    string socket_error = OpenConnection(&sock, "discord.com", HTTPS);
-    if (socket_error.size()) {
-        SSL_CTX_free(ctx);
-        EVP_cleanup();
-        ERR_free_strings();
-        ErrExit(EXIT_FAILURE, socket_error);
-    }
-    ssl = SSL_new(ctx); /* create new SSL connection state */
-    if (SSL_set_fd(ssl, sock) == 0) { /* attach the socket descriptor */
-        ERR_print_errors_fp(stderr);
-        Cleanup(ctx, &sock, ssl);
-        ErrExit(EXIT_FAILURE, "SSL_set_fd() failed");
-    }
-    if (SSL_connect(ssl) == -1) { /* perform the connection */
-        ERR_print_errors_fp(stderr);
-        Cleanup(ctx, &sock, ssl);
-        ErrExit(EXIT_FAILURE, "SSL_connect() failed");
-    }
+    Startup(&ctx, &sock, &ssl);
 
 #ifdef DEBUG
     cout << "* Successfully connected with " << SSL_get_cipher(ssl) << " encryption..." << endl;
@@ -301,7 +324,7 @@ int main(int argc, char** argv)
     string channel;
     string channel_id;
     string last_message_id;
-    string HTTP_code;
+    string SSL_read_return;
     const regex r_id_whole("(\"id\": \"[0-9]+\")");
     const regex r_id_num("([0-9]+)");
     const regex r_whole_last_message_id("(\"last_message_id\": (null|\"[0-9]+\"))");
@@ -317,11 +340,14 @@ int main(int argc, char** argv)
         strcat(buffer_request, access_token);
         strcat(buffer_request, "\r\n\r\n");
 
-        SSL_write(ssl, buffer_request, strlen(buffer_request)); /* encrypt & send message */
-        HTTP_code = SSLReadAnswer(ssl, &received);
-        if (HTTP_code.compare("HTTP/1.1 200 OK") != 0) {
+        if (SSL_write(ssl, buffer_request, strlen(buffer_request)) <= 0) {
             Cleanup(ctx, &sock, ssl);
-            ErrExit(EXIT_FAILURE, HTTP_code);
+            ErrExit(EXIT_FAILURE, "SSL_write() failed");
+        } /* encrypt & send message */
+        SSLReadAnswer(ssl, &received, &SSL_read_return);
+        if (SSL_read_return.compare("HTTP/1.1 200 OK") != 0) {
+            Cleanup(ctx, &sock, ssl);
+            ErrExit(EXIT_FAILURE, SSL_read_return);
         }
 
 #ifdef DEBUG
@@ -358,11 +384,14 @@ int main(int argc, char** argv)
         strcat(buffer_request, access_token);
         strcat(buffer_request, "\r\n\r\n");
 
-        SSL_write(ssl, buffer_request, strlen(buffer_request)); /* encrypt & send message */
-        HTTP_code = SSLReadAnswer(ssl, &received);
-        if (HTTP_code.compare("HTTP/1.1 200 OK") != 0) {
+        if (SSL_write(ssl, buffer_request, strlen(buffer_request)) <= 0) {
             Cleanup(ctx, &sock, ssl);
-            ErrExit(EXIT_FAILURE, HTTP_code);
+            ErrExit(EXIT_FAILURE, "SSL_write() failed");
+        } /* encrypt & send message */
+        SSLReadAnswer(ssl, &received, &SSL_read_return);
+        if (SSL_read_return.compare("HTTP/1.1 200 OK") != 0) {
+            Cleanup(ctx, &sock, ssl);
+            ErrExit(EXIT_FAILURE, SSL_read_return);
         }
 
 #ifdef DEBUG
@@ -412,18 +441,14 @@ int main(int argc, char** argv)
     vector<string> splitted_username;
     vector<string> splitted_content;
     vector<string> splitted_url;
-    char json_message[512];
-    char json_message_size[32];
+    char json_message[2048];
+    char json_message_size[5]; // lenght of json_message can be max 2047 => 4 chars + '\0'
 
     while (true) {
         if (!keep_running)
             break;
 
         all_messages.clear();
-        username.clear();
-        content.clear();
-        attachment.clear();
-
         memset(buffer_request, 0, sizeof(buffer_request));
 
         strcpy(buffer_request, "GET /api/v6/channels/");
@@ -434,17 +459,20 @@ int main(int argc, char** argv)
         strcat(buffer_request, access_token);
         strcat(buffer_request, "\r\n\r\n");
 
-        SSL_write(ssl, buffer_request, strlen(buffer_request)); /* encrypt & send message */
-        HTTP_code = SSLReadAnswer(ssl, &received);
-        if (HTTP_code.compare("HTTP/1.1 200 OK") != 0) {
-            Cleanup(ctx, &sock, ssl);
-            ErrExit(EXIT_FAILURE, HTTP_code);
-        }
-
 #ifdef DEBUG
         cout << endl
              << "* Trying to receive new messages from \"isa-bot\" channel...Request No." << ++request_counter << endl;
 #endif
+
+        if (SSL_write(ssl, buffer_request, strlen(buffer_request)) <= 0) {
+            Cleanup(ctx, &sock, ssl);
+            ErrExit(EXIT_FAILURE, "SSL_write() failed");
+        } /* encrypt & send message */
+        SSLReadAnswer(ssl, &received, &SSL_read_return);
+        if (SSL_read_return.compare("HTTP/1.1 200 OK") != 0) {
+            Cleanup(ctx, &sock, ssl);
+            ErrExit(EXIT_FAILURE, SSL_read_return);
+        }
 
         SplitString(received, "\r\n\r\n", &received_body);
         if (received_body.size() != 2) {
@@ -454,6 +482,20 @@ int main(int argc, char** argv)
         all_messages += received_body.at(1);
 
         if (all_messages.compare("[]") == 0) { // no new messages
+            if (!keep_running)
+                break;
+#ifdef DEBUG
+            cout << "# No new messages received..." << endl;
+#endif
+            if (restart_needed) {
+                restart_needed = false;
+#ifdef DEBUG
+                cout << endl
+                     << "***** RESTARTING *****" << endl;
+#endif
+                Cleanup(ctx, &sock, ssl);
+                Startup(&ctx, &sock, &ssl);
+            }
             continue;
         }
 
@@ -585,21 +627,35 @@ int main(int argc, char** argv)
             strcat(buffer_request, json_message);
             strcat(buffer_request, "\r\n\r\n");
 
-            SSL_write(ssl, buffer_request, strlen(buffer_request)); /* encrypt & send message */
+            if (SSL_write(ssl, buffer_request, strlen(buffer_request)) <= 0) {
+                Cleanup(ctx, &sock, ssl);
+                ErrExit(EXIT_FAILURE, "SSL_write() failed");
+            } /* encrypt & send message */
 
 #ifdef DEBUG
             cout << "   - Echo to message sent..." << endl;
 #endif
 
-            HTTP_code = SSLReadAnswer(ssl, &received);
-            if (HTTP_code.compare("HTTP/1.1 200 OK") != 0) {
+            SSLReadAnswer(ssl, &received, &SSL_read_return);
+            if (SSL_read_return.compare("HTTP/1.1 200 OK") != 0) {
                 Cleanup(ctx, &sock, ssl);
-                ErrExit(EXIT_FAILURE, HTTP_code);
+                ErrExit(EXIT_FAILURE, SSL_read_return);
             }
 
 #ifdef DEBUG
-            cout << "   - Answer: " << HTTP_code << endl;
+            cout << "   - Answer: " << SSL_read_return << endl;
 #endif
+        }
+        if (!keep_running)
+            break;
+        if (restart_needed) {
+            restart_needed = false;
+#ifdef DEBUG
+            cout << endl
+                 << "***** RESTARTING *****" << endl;
+#endif
+            Cleanup(ctx, &sock, ssl);
+            Startup(&ctx, &sock, &ssl);
         }
     }
     Cleanup(ctx, &sock, ssl);
