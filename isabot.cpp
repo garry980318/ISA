@@ -6,7 +6,7 @@
 
 static volatile sig_atomic_t keep_running = 1;
 static bool restart_needed = false;
-bool flag_verbose = false;
+static bool flag_verbose = false;
 
 void SIGINTHandler(int)
 {
@@ -114,7 +114,7 @@ string OpenConnection(int* sock, const char* hostname, int port)
         return "socket() failed";
 
     struct timeval timeout;
-    timeout.tv_sec = 1; // timeot for receiving and sending is 1s
+    timeout.tv_sec = 2; // timeot for receiving and sending is 2s
     timeout.tv_usec = 0;
 
     if (setsockopt(*sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout)) < 0) {

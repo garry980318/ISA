@@ -6,32 +6,25 @@
 #define ISABOT_HPP_
 
 #include <arpa/inet.h>
-#include <ctype.h>
 #include <getopt.h>
+#include <iostream>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
-#include <pwd.h>
+#include <regex>
 #include <signal.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <string>
 #include <sys/socket.h>
 #include <unistd.h>
-
-#include <iostream>
-#include <regex>
-#include <string>
 #include <vector>
 
-using namespace std;
-
-#define BAD_OPTIONS 99
+#define BAD_OPTIONS 99 // bad options errno
 
 #define BUFFER 8192 // 8KB
 #define HTTPS 443
+
+using namespace std;
 
 /**
  * @brief

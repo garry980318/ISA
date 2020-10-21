@@ -12,10 +12,10 @@ BIN = isabot
 DOC = README manual.pdf
 PROJECT_FILES = $(SRC) $(HEADER) Makefile $(DOC)
 
-$(BIN): $(SRC)
+$(BIN): $(SRC) $(HEADER)
 	$(CC) $(SRC) -o $(BIN) $(CFLAGS) $(LDLIBS)
 
-debug: $(SRC)
+debug:
 	$(CC) $(SRC) -o $(BIN) $(CFLAGS) -g -DDEBUG=1 $(LDLIBS)
 
 clean:
@@ -23,3 +23,6 @@ clean:
 
 tar: clean
 	tar -cvf $(LOGIN).tar $(PROJECT_FILES)
+
+upload:
+	scp $(SRC) $(HEADER) Makefile eva:~/ISA
