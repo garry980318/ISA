@@ -154,30 +154,46 @@ void SSLReadAnswer(SSL* ssl, string* received, string* return_str)
     received->clear();
     return_str->clear();
 
-    bool loop = true;
-    while (loop) {
-        memset(buffer_answer, 0, sizeof(buffer_answer));
-        bytes = SSL_read(ssl, buffer_answer, sizeof(buffer_answer) - 1); /* get reply & decrypt */
-        *received += buffer_answer;
+    unsigned int attempt = 0;
+    bool loop;
+    while (true) {
+        loop = true;
+        while (loop) {
+            memset(buffer_answer, 0, sizeof(buffer_answer));
+            bytes = SSL_read(ssl, buffer_answer, sizeof(buffer_answer) - 1); /* get reply & decrypt */
+            *received += buffer_answer;
 
-        if (bytes <= 0) {
-            switch (SSL_get_error(ssl, bytes)) {
-            case SSL_ERROR_NONE:
-            case SSL_ERROR_ZERO_RETURN:
-            case SSL_ERROR_WANT_READ:
-            case SSL_ERROR_WANT_WRITE:
-                loop = false;
-                break;
-            case SSL_ERROR_SYSCALL:
-            case SSL_ERROR_SSL:
-                restart_needed = true;
-                loop = false;
-                break;
-            default:
-                *return_str += "UNKNOWN ERROR";
-                return;
+            if (bytes <= 0) {
+                switch (SSL_get_error(ssl, bytes)) {
+                case SSL_ERROR_ZERO_RETURN:
+                case SSL_ERROR_WANT_READ:
+                case SSL_ERROR_WANT_WRITE:
+                    loop = false;
+                    break;
+                case SSL_ERROR_SYSCALL:
+                case SSL_ERROR_SSL:
+                    restart_needed = true;
+                    loop = false;
+                    break;
+                default:
+                    *return_str += "UNKNOWN ERROR";
+                    return;
+                }
             }
         }
+        if (received->size() == 0) { // nothing has been received...try 10 more times, than return error message
+            attempt++;
+#ifdef DEBUG
+            cout << "# No answer from server..trying to read again (" << attempt << "/10)..." << endl;
+#endif
+            if (attempt < 11) {
+                usleep(1 * SECOND); // wait 1s then try again...
+                continue;
+            }
+            *return_str += "no answer from server";
+            return;
+        }
+        break; // something has been received => break
     }
 
     SplitString(*received, "\r\n", &answer);
@@ -412,7 +428,7 @@ int main(int argc, char** argv)
                 channel_id += match[0];
             }
 
-            if (regex_search(channel, match, r_whole_last_message_id))
+            if (regex_search(channel, match, r_whole_last_message_id)) // obtaining the ID of last message from answer
                 last_message_id += match[0];
             if (regex_search(last_message_id, match, r_last_message_id)) {
                 last_message_id.clear();
@@ -454,7 +470,7 @@ int main(int argc, char** argv)
         strcpy(buffer_request, "GET /api/v6/channels/");
         strcat(buffer_request, channel_id.c_str());
         strcat(buffer_request, "/messages?after=");
-        strcat(buffer_request, last_message_id.c_str());
+        strcat(buffer_request, last_message_id.c_str()); // we want to get all new messages which were posted => all messages after the message with the last_message_id
         strcat(buffer_request, " HTTP/1.1\r\nHost: discord.com\r\nAuthorization: Bot ");
         strcat(buffer_request, access_token);
         strcat(buffer_request, "\r\n\r\n");
@@ -471,6 +487,14 @@ int main(int argc, char** argv)
         SSLReadAnswer(ssl, &received, &SSL_read_return);
         if (SSL_read_return.compare("HTTP/1.1 200 OK") != 0) {
             Cleanup(ctx, &sock, ssl);
+            if (SSL_read_return.compare("HTTP/1.1 500 Internal Server Error") == 0) {
+                Startup(&ctx, &sock, &ssl); // RESTART
+#ifdef DEBUG
+                cout << endl
+                     << "***** Internal Server Error - RESTARTING *****" << endl;
+#endif
+                continue;
+            }
             ErrExit(EXIT_FAILURE, SSL_read_return);
         }
 
@@ -510,7 +534,7 @@ int main(int argc, char** argv)
              << " received..." << endl;
 #endif
 
-        if (regex_search(splitted_messages.at(0), match, r_id_whole)) {
+        if (regex_search(splitted_messages.at(0), match, r_id_whole)) { // actualizing the ID of last message
             last_message_id.clear();
             last_message_id += match[0];
             if (regex_search(last_message_id, match, r_id_num)) {
@@ -639,6 +663,14 @@ int main(int argc, char** argv)
             SSLReadAnswer(ssl, &received, &SSL_read_return);
             if (SSL_read_return.compare("HTTP/1.1 200 OK") != 0) {
                 Cleanup(ctx, &sock, ssl);
+                if (SSL_read_return.compare("HTTP/1.1 500 Internal Server Error") == 0) {
+                    Startup(&ctx, &sock, &ssl); // RESTART
+#ifdef DEBUG
+                    cout << endl
+                         << "***** Internal Server Error - RESTARTING *****" << endl;
+#endif
+                    continue;
+                }
                 ErrExit(EXIT_FAILURE, SSL_read_return);
             }
 

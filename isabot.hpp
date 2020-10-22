@@ -23,6 +23,7 @@
 
 #define BUFFER 8192 // 8KB
 #define HTTPS 443
+#define SECOND 1000000 // 1s = 1000000us
 
 using namespace std;
 
