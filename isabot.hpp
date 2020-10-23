@@ -10,7 +10,7 @@
 #include <iostream>
 #include <netdb.h>
 #include <netinet/in.h>
-#include <openssl/err.h>
+#include <openssl/evp.h>
 #include <openssl/ssl.h>
 #include <regex>
 #include <signal.h>
@@ -50,17 +50,7 @@ void PrintHelp();
 /**
  * @brief
  */
-SSL_CTX* InitCTX();
-
-/**
- * @brief
- */
-string OpenConnection(int* sock, const char* hostname, int port);
-
-/**
- * @brief
- */
-void SSLReadAnswer(SSL* ssl, string* received, string* return_str);
+void OpenConnection(int* sock, const char* hostname, int port, string* return_str);
 
 /**
  * @brief
@@ -70,7 +60,12 @@ void Startup(SSL_CTX** ctx, int* sock, SSL** ssl);
 /**
  * @brief
  */
-void Cleanup(SSL_CTX* ctx, int* sock, SSL* ssl);
+void Cleanup(SSL_CTX** ctx, int* sock, SSL** ssl);
+
+/**
+ * @brief
+ */
+void SSLReadAnswer(SSL* ssl, string* received, string* return_str);
 
 /**
  * @brief
