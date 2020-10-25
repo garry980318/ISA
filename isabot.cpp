@@ -1,5 +1,10 @@
 /**
- * @author Radoslav Grenčík, xgrenc00@stud.fit.vutbr.cz
+ * @file isabot.cpp
+ *
+ * @brief
+ *
+ * @author Radoslav Grenčík
+ * Contact: xgrenc00@stud.fit.vutbr.cz
  */
 
 #include "isabot.hpp"
@@ -259,6 +264,8 @@ void SSLReadAnswer(SSL* ssl, string* received, string* return_str)
 
 string ToLower(string str)
 {
+    if (str.size() == 0)
+        return "";
     string lower_str;
     for (unsigned int i = 0; i < str.size(); i++)
         lower_str += tolower(str[i]);
