@@ -38,12 +38,13 @@ using namespace std;
 void SIGINTHandler(int);
 
 /**
- * This procedure prints the given "err" to STDERR and exits the program with given "errnum".
+ * This function prints the given "err" to STDERR and returns "errnum".
  *
  * @param errnum the error number
  * @param err the error string
+ * @returns errnum
  */
-void ErrExit(int errnum, string err);
+int Error(int errnum, string err);
 
 /**
  * This procedure parses the command line arguments (options).
@@ -56,39 +57,41 @@ void ErrExit(int errnum, string err);
  * @param access_token pointer to array of chars where the access token (to authorize the bot),
  * which was passed by the user through the -t <access_token> option, will be written
  */
-void ParseOpt(int argc, char** argv, char* access_token);
+int ParseOpt(int argc, char** argv, char* access_token);
 
 /**
  * This procedure prints the help to STDOUT and exits the program with EXIT_SUCCESS.
  */
-void PrintHelp();
+int PrintHelp();
 
 /**
  * This procedure creates the client socket, sets socket's send and receive timeouts and
  * performs connection to the server with the specified hostname on the specified port.
  * This procedure also translate hostname (domain name) of server to the corresponding IP address, which is used in connection.
+ * The content of the string where the "return_str" points is always errased and filled ONLY if error has occured.
+ * If the string where the "return_str" points is empty after the procedure completes, NO error has occured.
  *
  * @param sock pointer to the socket descriptor - after the socket is created, it's descriptor is written to the memory where "sock" points
  * @param hostname the server hostname
  * @param port the port number
- * @param return_str  pointer to return string - if error occurs in the procedure, error message is written to the memory where "return_str" points
+ * @param return_str  pointer to return string - ONLY if error occured in the procedure, error message is written to the memory where "return_str" points
  */
-void OpenConnection(int* sock, const char* hostname, int port, string* return_str);
+int OpenConnection(int* sock, const char* hostname, int port, string* return_str);
 
 /**
  *
  *
  * @param ctx
- * @param sock
+ * @param sock pointer to the socket decriptor
  * @param ssl
  */
-void Startup(SSL_CTX** ctx, int* sock, SSL** ssl);
+int Startup(SSL_CTX** ctx, int* sock, SSL** ssl);
 
 /**
  *
  *
  * @param ctx
- * @param sock
+ * @param sock pointer to the socket descriptor
  * @param ssl
  */
 void Cleanup(SSL_CTX** ctx, int* sock, SSL** ssl);
@@ -96,9 +99,15 @@ void Cleanup(SSL_CTX** ctx, int* sock, SSL** ssl);
 /**
  *
  *
+ * If the content of the string where the "return_str" points is "HTTP/1.1 200 OK", NO error has occured and data has been read successfully.
+ * If the content of the string where the "return_str" points is "HTTP/1.1 500 Internal Server Error",
+ * internal server error has occured and the restart of the SSL connection is necessary (data has NOT been read successfully).
+ * If the content of the string where the "return_str" points is something else, we need to call procedure Cleanup() and ErrExit()
+ * with the content of the string where the "return_str" points as parameter "err".
+ *
  * @param ssl
- * @param received
- * @param return_str
+ * @param received pointer to received string - data which has been read are copied from buffer to the memory where "received" points
+ * @param return_str pointer to return string - error message or HTTP return code is written to the memory where "return_str" points
  */
 void SSLReadAnswer(SSL* ssl, string* received, string* return_str);
 

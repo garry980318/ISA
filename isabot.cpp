@@ -18,7 +18,7 @@ void SIGINTHandler(int)
     keep_running = 0;
 }
 
-void ErrExit(int errnum, string err)
+int Error(int errnum, string err)
 {
     if (err.size())
         cerr << "ERROR: " << err << "." << endl;
@@ -27,10 +27,10 @@ void ErrExit(int errnum, string err)
         cerr << "Try 'isabot -h|--help' for more information." << endl;
         break;
     }
-    exit(errnum);
+    return (errnum);
 }
 
-void ParseOpt(int argc, char** argv, char* access_token)
+int ParseOpt(int argc, char** argv, char* access_token)
 {
     int opt;
     bool flag_access_token = false;
@@ -49,24 +49,22 @@ void ParseOpt(int argc, char** argv, char* access_token)
 
         switch (opt) {
         case 'h':
-            PrintHelp();
-            break;
+            return PrintHelp();
         case 'v':
             if (flag_verbose == false)
                 flag_verbose = true;
             else
-                ErrExit(BAD_OPTIONS, "bad option - option '-v|--verbose' declared more than once");
+                return Error(BAD_OPTIONS, "bad option - option '-v|--verbose' declared more than once");
             break;
         case 't':
             if (flag_access_token == false) {
                 flag_access_token = true;
                 strcpy(access_token, optarg);
             } else
-                ErrExit(BAD_OPTIONS, "bad option - option '-t <access_token>' declared more than once");
+                return Error(BAD_OPTIONS, "bad option - option '-t <access_token>' declared more than once");
             break;
         case '?':
-            ErrExit(BAD_OPTIONS, "");
-            break;
+            return Error(BAD_OPTIONS, "");
         }
     }
 
@@ -75,16 +73,16 @@ void ParseOpt(int argc, char** argv, char* access_token)
         while (optind < argc)
             cerr << argv[optind++] << " ";
         cerr << endl;
-        ErrExit(BAD_OPTIONS, "");
+        return Error(BAD_OPTIONS, "");
     }
 
     if (flag_access_token)
-        return;
+        return EXIT_SUCCESS;
 
-    PrintHelp();
+    return PrintHelp();
 }
 
-void PrintHelp()
+int PrintHelp()
 {
     cout << "USAGE: ./isabot [-h|--help] [-v|--verbose] [-t <access_token>]" << endl
          << endl
@@ -102,18 +100,19 @@ void PrintHelp()
          << "-t <access_token>    Token that the bot needs for authorization." << endl
          << endl
          << "If no options were provided, this help will be displayed." << endl;
-    exit(EXIT_SUCCESS);
+    return EXIT_SUCCESS;
 }
 
-void OpenConnection(int* sock, const char* hostname, int port, string* return_str)
+int OpenConnection(int* sock, const char* hostname, int port, string* return_str)
 {
     struct sockaddr_in server;
     memset(&server, 0, sizeof(server));
     return_str->clear();
 
-    if ((*sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) { // create a client socket
+    *sock = socket(AF_INET, SOCK_STREAM, 0); // create a client socket
+    if (*sock == -1) {
         *return_str += "socket() failed";
-        return;
+        return EXIT_FAILURE;
     }
 
     struct timeval timeout;
@@ -121,23 +120,20 @@ void OpenConnection(int* sock, const char* hostname, int port, string* return_st
     timeout.tv_usec = 0;
 
     if (setsockopt(*sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout)) < 0) {
-        close(*sock);
         *return_str += "setsockopt() SO_RCVTIMEO failed";
-        return;
+        return EXIT_FAILURE;
     }
 
     if (setsockopt(*sock, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout, sizeof(timeout)) < 0) {
-        close(*sock);
         *return_str += "setsockopt() SO_SNDTIMEO failed";
-        return;
+        return EXIT_FAILURE;
     }
 
     struct hostent* he;
     he = gethostbyname(hostname);
     if (he == NULL) {
-        close(*sock);
         *return_str += "server IP not found";
-        return;
+        return EXIT_FAILURE;
     }
 
     server.sin_addr.s_addr = inet_addr(inet_ntoa(*((struct in_addr*)he->h_addr_list[0])));
@@ -145,58 +141,70 @@ void OpenConnection(int* sock, const char* hostname, int port, string* return_st
     server.sin_port = htons(port);
 
     if (connect(*sock, (struct sockaddr*)&server, sizeof(server)) == -1) {
-        close(*sock);
         *return_str += "connect() failed";
+        return EXIT_FAILURE;
     }
+
+    return EXIT_SUCCESS;
 }
 
-void Startup(SSL_CTX** ctx, int* sock, SSL** ssl)
+int Startup(SSL_CTX** ctx, int* sock, SSL** ssl)
 {
     SSL_library_init();
     OpenSSL_add_all_algorithms();
 
     *ctx = SSL_CTX_new(SSLv23_client_method()); // create new context
     if (*ctx == NULL) {
-        EVP_cleanup();
-        ErrExit(EXIT_FAILURE, "SSL_CTX_new() failed");
+        Cleanup(ctx, sock, ssl);
+        return Error(EXIT_FAILURE, "SSL_CTX_new() failed");
     }
 
+    int return_code;
     string socket_error;
-    OpenConnection(sock, "discord.com", HTTPS, &socket_error);
-    if (socket_error.size()) {
-        SSL_CTX_free(*ctx);
-        EVP_cleanup();
-        ErrExit(EXIT_FAILURE, socket_error);
+    return_code = OpenConnection(sock, "discord.com", HTTPS, &socket_error);
+    if (return_code != EXIT_SUCCESS) {
+        Cleanup(ctx, sock, ssl);
+        return Error(return_code, socket_error);
     }
 
     *ssl = SSL_new(*ctx); // create new SSL connection state
+    if (*ssl == NULL) {
+        Cleanup(ctx, sock, ssl);
+        return Error(EXIT_FAILURE, "SSL_new() failed");
+    }
+
     SSL_set_connect_state(*ssl);
     if (SSL_set_fd(*ssl, *sock) == 0) { // attach the socket descriptor
         Cleanup(ctx, sock, ssl);
-        ErrExit(EXIT_FAILURE, "SSL_set_fd() failed");
+        return Error(EXIT_FAILURE, "SSL_set_fd() failed");
     }
 
     if (SSL_connect(*ssl) == -1) { // perform the connection
         Cleanup(ctx, sock, ssl);
-        ErrExit(EXIT_FAILURE, "SSL_connect() failed");
+        return Error(EXIT_FAILURE, "SSL_connect() failed");
     }
 
 #ifdef DEBUG
     cout << "* Successfully connected with " << SSL_get_cipher(*ssl) << " encryption..." << endl;
 #endif
+
+    return EXIT_SUCCESS;
 }
 
 void Cleanup(SSL_CTX** ctx, int* sock, SSL** ssl)
 {
-    SSL_free(*ssl); // release connection state
-    *ssl = NULL;
-
-    close(*sock); // close socket
-    *sock = -1;
-
-    SSL_CTX_free(*ctx); // release context
-    *ctx = NULL;
-
+    if (*ssl != NULL) {
+        SSL_free(*ssl); // release connection state
+        *ssl = NULL;
+    }
+    if (*sock != -1) {
+        close(*sock); // close socket
+        *sock = -1;
+    }
+    if (*ctx != NULL) {
+        SSL_CTX_free(*ctx); // release context
+        *ctx = NULL;
+    }
     EVP_cleanup();
 
 #ifdef DEBUG
@@ -350,15 +358,20 @@ void SplitArrayOfJSON(string array, vector<string>* list)
 int main(int argc, char** argv)
 {
     signal(SIGINT, SIGINTHandler); // SIGINT handling with SIGINTHandler procedure
+    int return_code;
 
     char access_token[512];
     memset(access_token, 0, sizeof(access_token));
-    ParseOpt(argc, argv, access_token);
+    return_code = ParseOpt(argc, argv, access_token); // parse the command line arguments (options)
+    if (return_code != EXIT_SUCCESS)
+        return return_code;
 
     SSL_CTX* ctx = NULL;
     int sock = -1;
     SSL* ssl = NULL;
-    Startup(&ctx, &sock, &ssl);
+    return_code = Startup(&ctx, &sock, &ssl);
+    if (return_code != EXIT_SUCCESS)
+        return return_code;
 
     char buffer_request[BUFFER];
     string received;
@@ -367,6 +380,7 @@ int main(int argc, char** argv)
     string channel_id;
     string last_message_id;
     string SSL_read_return;
+    vector<string> temp_list;
     const regex r_id_whole("(\"id\": \"[0-9]+\")");
     const regex r_id_num("([0-9]+)");
     const regex r_whole_last_message_id("(\"last_message_id\": (null|\"[0-9]+\"))");
@@ -377,6 +391,9 @@ int main(int argc, char** argv)
     const regex r_isa_bot_channel("(\"id\": \"[0-9]+\", \"last_message_id\": (null|\"[0-9]+\"), \"type\": [0-9]+, \"name\": \"isa-bot\")");
     smatch match;
 
+    /* -------------------------------------------------------------------------- */
+    /*            GET THE ID OF THE GUILD, OF WHICH THE BOT IS A MEMBER           */
+    /* -------------------------------------------------------------------------- */
     if (keep_running) {
         memset(buffer_request, 0, sizeof(buffer_request));
 
@@ -386,12 +403,12 @@ int main(int argc, char** argv)
 
         if (SSL_write(ssl, buffer_request, strlen(buffer_request)) <= 0) {
             Cleanup(&ctx, &sock, &ssl);
-            ErrExit(EXIT_FAILURE, "SSL_write() failed");
+            return Error(EXIT_FAILURE, "SSL_write() failed");
         } // encrypt & send message
         SSLReadAnswer(ssl, &received, &SSL_read_return);
         if (SSL_read_return.compare("HTTP/1.1 200 OK") != 0) {
             Cleanup(&ctx, &sock, &ssl);
-            ErrExit(EXIT_FAILURE, SSL_read_return);
+            return Error(EXIT_FAILURE, SSL_read_return);
         }
 
 #ifdef DEBUG
@@ -399,19 +416,29 @@ int main(int argc, char** argv)
              << "* Bot guilds received..." << endl;
 #endif
 
-        if (regex_search(received, match, r_id_whole)) {
-            if (match.size() > 2) {
-                Cleanup(&ctx, &sock, &ssl);
-                ErrExit(EXIT_FAILURE, "BOT is member of more than one Discord guild");
-            }
-            guild_id += match[0];
-            if (regex_search(guild_id, match, r_id_num)) {
-                guild_id.clear();
-                guild_id += match[0];
-            }
-        } else {
+        SplitString(received, "\r\n\r\n", &temp_list);
+        if (temp_list.size() != 2) {
             Cleanup(&ctx, &sock, &ssl);
-            ErrExit(EXIT_FAILURE, "BOT is not member of any Discord guild");
+            return Error(EXIT_FAILURE, "bad answer from server");
+        }
+        SplitArrayOfJSON(temp_list.at(1), &temp_list);
+
+        switch (temp_list.size()) {
+        case 0:
+            Cleanup(&ctx, &sock, &ssl);
+            return Error(EXIT_FAILURE, "BOT is not member of any Discord guild");
+        case 1:
+            if (regex_search(temp_list.at(0), match, r_id_whole)) {
+                guild_id += match[0];
+                if (regex_search(guild_id, match, r_id_num)) {
+                    guild_id.clear();
+                    guild_id += match[0];
+                }
+            }
+            break;
+        default:
+            Cleanup(&ctx, &sock, &ssl);
+            return Error(EXIT_FAILURE, "BOT is member of more than one Discord guild");
         }
 
 #ifdef DEBUG
@@ -419,6 +446,9 @@ int main(int argc, char** argv)
 #endif
     }
 
+    /* -------------------------------------------------------------------------- */
+    /*                     GET THE ID OF THE "isa-bot" CHANNEL                    */
+    /* -------------------------------------------------------------------------- */
     if (keep_running) {
         memset(buffer_request, 0, sizeof(buffer_request));
 
@@ -430,12 +460,12 @@ int main(int argc, char** argv)
 
         if (SSL_write(ssl, buffer_request, strlen(buffer_request)) <= 0) {
             Cleanup(&ctx, &sock, &ssl);
-            ErrExit(EXIT_FAILURE, "SSL_write() failed");
+            return Error(EXIT_FAILURE, "SSL_write() failed");
         } // encrypt & send message
         SSLReadAnswer(ssl, &received, &SSL_read_return);
         if (SSL_read_return.compare("HTTP/1.1 200 OK") != 0) {
             Cleanup(&ctx, &sock, &ssl);
-            ErrExit(EXIT_FAILURE, SSL_read_return);
+            return Error(EXIT_FAILURE, SSL_read_return);
         }
 
 #ifdef DEBUG
@@ -443,32 +473,50 @@ int main(int argc, char** argv)
              << "* Guild channels received..." << endl;
 #endif
 
-        if (regex_search(received, match, r_isa_bot_channel)) {
-            if (match.size() > 3) {
-                Cleanup(&ctx, &sock, &ssl);
-                ErrExit(EXIT_FAILURE, "there is more than 1 \"isa-bot\" channel in this Discord guild");
-            }
-            channel += match[0];
-            if (regex_search(channel, match, r_id_whole))
-                channel_id += match[0];
-            if (regex_search(channel_id, match, r_id_num)) {
-                channel_id.clear();
-                channel_id += match[0];
-            }
-
-            if (regex_search(channel, match, r_whole_last_message_id)) // obtaining the ID of last message from answer
-                last_message_id += match[0];
-            if (regex_search(last_message_id, match, r_last_message_id)) {
-                last_message_id.clear();
-                last_message_id += match[0];
-            }
-        } else {
+        SplitString(received, "\r\n\r\n", &temp_list);
+        if (temp_list.size() != 2) {
             Cleanup(&ctx, &sock, &ssl);
-            ErrExit(EXIT_FAILURE, "there is no \"isa-bot\" channel in this Discord guild");
+            return Error(EXIT_FAILURE, "bad answer from server");
+        }
+        received.clear();
+        received += temp_list.at(1);
+        SplitArrayOfJSON(temp_list.at(1), &temp_list);
+
+        int channel_counter = 0;
+        for (unsigned int i = 0; i < temp_list.size(); i++)
+            if (regex_search(temp_list.at(i), match, r_isa_bot_channel))
+                channel_counter++;
+
+        switch (channel_counter) {
+        case 0:
+            Cleanup(&ctx, &sock, &ssl);
+            return Error(EXIT_FAILURE, "there is no \"isa-bot\" channel in this Discord guild");
+        case 1:
+            if (regex_search(received, match, r_isa_bot_channel)) {
+                channel += match[0];
+                if (regex_search(channel, match, r_id_whole))
+                    channel_id += match[0];
+                if (regex_search(channel_id, match, r_id_num)) {
+                    channel_id.clear();
+                    channel_id += match[0];
+                }
+
+                if (regex_search(channel, match, r_whole_last_message_id)) // obtaining the ID of last message from answer
+                    last_message_id += match[0];
+                if (regex_search(last_message_id, match, r_last_message_id)) {
+                    last_message_id.clear();
+                    last_message_id += match[0];
+                }
+            }
+            break;
+        default:
+            Cleanup(&ctx, &sock, &ssl);
+            return Error(EXIT_FAILURE, "there is more than 1 \"isa-bot\" channel in this Discord guild");
         }
 
 #ifdef DEBUG
         cout << "   - \"isa-bot\" channel ID: " << channel_id << endl;
+        cout << "   - last message ID: " << last_message_id << endl;
 #endif
     }
 
@@ -488,6 +536,9 @@ int main(int argc, char** argv)
     char json_message[2048];
     char json_message_size[5]; // lenght of json_message can be max 2047 => 4 chars + '\0'
 
+    /* -------------------------------------------------------------------------- */
+    /*                                THE MAIN LOOP                               */
+    /* -------------------------------------------------------------------------- */
     while (true) {
         if (!keep_running) // SIGINT received
             break;
@@ -497,8 +548,11 @@ int main(int argc, char** argv)
 
         strcpy(buffer_request, "GET /api/v6/channels/");
         strcat(buffer_request, channel_id.c_str());
-        strcat(buffer_request, "/messages?after=");
-        strcat(buffer_request, last_message_id.c_str()); // we want to get all new messages which were posted => all messages after the message with the last_message_id
+        strcat(buffer_request, "/messages");
+        if (last_message_id.compare("null") != 0) { // if there is no message in channel "isa-bot", last_message_id = null => request without "?after=..."
+            strcat(buffer_request, "?after=");
+            strcat(buffer_request, last_message_id.c_str()); // we want to get all new messages which were posted => all messages after the message with the last_message_id
+        }
         strcat(buffer_request, " HTTP/1.1\r\nHost: discord.com\r\nAuthorization: Bot ");
         strcat(buffer_request, access_token);
         strcat(buffer_request, "\r\n\r\n");
@@ -510,7 +564,7 @@ int main(int argc, char** argv)
 
         if (SSL_write(ssl, buffer_request, strlen(buffer_request)) <= 0) {
             Cleanup(&ctx, &sock, &ssl);
-            ErrExit(EXIT_FAILURE, "SSL_write() failed");
+            return Error(EXIT_FAILURE, "SSL_write() failed");
         } // encrypt & send message
         SSLReadAnswer(ssl, &received, &SSL_read_return);
         if (SSL_read_return.compare("HTTP/1.1 200 OK") != 0) {
@@ -519,16 +573,18 @@ int main(int argc, char** argv)
 #ifdef DEBUG
                 cout << "***** Internal Server Error - RESTARTING *****" << endl;
 #endif
-                Startup(&ctx, &sock, &ssl); // RESTART
+                return_code = Startup(&ctx, &sock, &ssl); // RESTART
+                if (return_code != EXIT_SUCCESS)
+                    return return_code;
                 continue;
             }
-            ErrExit(EXIT_FAILURE, SSL_read_return);
+            return Error(EXIT_FAILURE, SSL_read_return);
         }
 
         SplitString(received, "\r\n\r\n", &received_body);
         if (received_body.size() != 2) {
             Cleanup(&ctx, &sock, &ssl);
-            ErrExit(EXIT_FAILURE, "bad answer from server");
+            return Error(EXIT_FAILURE, "bad answer from server");
         }
         all_messages += received_body.at(1);
 
@@ -544,7 +600,9 @@ int main(int argc, char** argv)
 #ifdef DEBUG
                 cout << "***** SSL fatal error - RESTARTING *****" << endl;
 #endif
-                Startup(&ctx, &sock, &ssl);
+                return_code = Startup(&ctx, &sock, &ssl);
+                if (return_code != EXIT_SUCCESS)
+                    return return_code;
             }
             continue;
         }
@@ -552,12 +610,11 @@ int main(int argc, char** argv)
         SplitArrayOfJSON(all_messages, &splitted_messages);
         if (splitted_messages.size() < 1) {
             Cleanup(&ctx, &sock, &ssl);
-            ErrExit(EXIT_FAILURE, "bad answer from server");
+            return Error(EXIT_FAILURE, "bad answer from server");
         }
 
 #ifdef DEBUG
-        cout << "# " << splitted_messages.size() << " new " << (splitted_messages.size() == 1 ? "message" : "messages")
-             << " received..." << endl;
+        cout << "# " << splitted_messages.size() << " new " << (splitted_messages.size() == 1 ? "message" : "messages") << " received..." << endl;
 #endif
 
         if (regex_search(splitted_messages.at(0), match, r_id_whole)) { // actualizing the ID of last message => last received message is the first element in splitted_messages
@@ -580,7 +637,7 @@ int main(int argc, char** argv)
                 SplitString(username, "\", \"avatar\":", &splitted_username);
                 if (splitted_username.size() < 1) {
                     Cleanup(&ctx, &sock, &ssl);
-                    ErrExit(EXIT_FAILURE, "bad answer from server");
+                    return Error(EXIT_FAILURE, "bad answer from server");
                 }
                 username.clear();
                 username += splitted_username.at(0);
@@ -588,7 +645,7 @@ int main(int argc, char** argv)
                 SplitString(username, "\"username\": \"", &splitted_username);
                 if (splitted_username.size() != 1) {
                     Cleanup(&ctx, &sock, &ssl);
-                    ErrExit(EXIT_FAILURE, "bad answer from server");
+                    return Error(EXIT_FAILURE, "bad answer from server");
                 }
                 username.clear();
                 username += splitted_username.at(0);
@@ -606,7 +663,7 @@ int main(int argc, char** argv)
                 SplitString(content, "\"content\": \"", &splitted_content);
                 if (splitted_content.size() != 1) {
                     Cleanup(&ctx, &sock, &ssl);
-                    ErrExit(EXIT_FAILURE, "bad answer from server");
+                    return Error(EXIT_FAILURE, "bad answer from server");
                 }
                 content.clear();
                 content += splitted_content.at(0);
@@ -621,8 +678,7 @@ int main(int argc, char** argv)
                     break;
                 default:
                     Cleanup(&ctx, &sock, &ssl);
-                    ErrExit(EXIT_FAILURE, "bad answer from server");
-                    break;
+                    return Error(EXIT_FAILURE, "bad answer from server");
                 }
             }
 
@@ -634,7 +690,7 @@ int main(int argc, char** argv)
                 SplitString(attachment, "\"url\": \"", &splitted_url);
                 if (splitted_url.size() != 1) {
                     Cleanup(&ctx, &sock, &ssl);
-                    ErrExit(EXIT_FAILURE, "bad answer from server");
+                    return Error(EXIT_FAILURE, "bad answer from server");
                 }
                 attachment.clear();
                 attachment += splitted_url.at(0);
@@ -642,7 +698,7 @@ int main(int argc, char** argv)
                 SplitString(attachment, "\", \"proxy_url\":", &splitted_url);
                 if (splitted_url.size() != 1) {
                     Cleanup(&ctx, &sock, &ssl);
-                    ErrExit(EXIT_FAILURE, "bad answer from server");
+                    return Error(EXIT_FAILURE, "bad answer from server");
                 }
                 attachment.clear();
                 attachment += splitted_url.at(0);
@@ -678,7 +734,7 @@ int main(int argc, char** argv)
 
             if (SSL_write(ssl, buffer_request, strlen(buffer_request)) <= 0) {
                 Cleanup(&ctx, &sock, &ssl);
-                ErrExit(EXIT_FAILURE, "SSL_write() failed");
+                return Error(EXIT_FAILURE, "SSL_write() failed");
             } // encrypt & send message
 
 #ifdef DEBUG
@@ -692,10 +748,12 @@ int main(int argc, char** argv)
 #ifdef DEBUG
                     cout << "***** Internal Server Error - RESTARTING *****" << endl;
 #endif
-                    Startup(&ctx, &sock, &ssl); // RESTART
+                    return_code = Startup(&ctx, &sock, &ssl); // RESTART
+                    if (return_code != EXIT_SUCCESS)
+                        return return_code;
                     continue;
                 }
-                ErrExit(EXIT_FAILURE, SSL_read_return);
+                return Error(EXIT_FAILURE, SSL_read_return);
             }
 
 #ifdef DEBUG
@@ -710,7 +768,9 @@ int main(int argc, char** argv)
 #ifdef DEBUG
             cout << "***** SSL fatal error - RESTARTING *****" << endl;
 #endif
-            Startup(&ctx, &sock, &ssl);
+            return_code = Startup(&ctx, &sock, &ssl);
+            if (return_code != EXIT_SUCCESS)
+                return return_code;
         }
     }
 
@@ -718,6 +778,7 @@ int main(int argc, char** argv)
 #ifdef DEBUG
     cout << "* EXIT SUCCESS..." << endl;
 #endif
+
     return EXIT_SUCCESS;
 }
 /*** End of file isabot.cpp ***/
