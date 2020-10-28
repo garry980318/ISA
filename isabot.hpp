@@ -28,55 +28,48 @@
 
 #define BUFFER 8192 // 8KB
 #define HTTPS 443
-#define SECOND 1000000 // 1s = 1000000us
+#define ONE_M_USEC 1000000 // one million microseconds
 
 using namespace std;
-
-/**
- * This procedure is called when signal SIGINT is received. It sets the "keep_running" variable to "0" and the program will end correctly.
- */
-void SIGINTHandler(int);
 
 /**
  * This function prints the given "err" to STDERR and returns "errnum".
  *
  * @param errnum the error number
  * @param err the error string
- * @returns errnum
+ * @returns "errnum"
  */
 int Error(int errnum, string err);
 
 /**
- * This procedure parses the command line arguments (options).
- * If -v|--verbose option was used, it sets the "flag_verbose" to "true".
- * If bad combination or number of options was used, ErrExit() procedure is called with BAD_OPTIONS passed as "errnum" parameter.
- * If no option was used, PrintHelp() procedure is called.
+ * This function parses the command line arguments (options). If "-v|--verbose" option has been used, it sets the "flag_verbose" to "true". If no option has been used, PrintHelp() function is called and it's return value is returned.
  *
  * @param argc the number of command line arguments (options)
  * @param argv the array of command line arguments (options)
  * @param access_token pointer to array of chars where the access token (to authorize the bot),
  * which was passed by the user through the -t <access_token> option, will be written
+ * @returns EXIT_SUCCESS on success or BAD_OPTIONS if bad combination or number of options has been used
  */
 int ParseOpt(int argc, char** argv, char* access_token);
 
 /**
- * This procedure prints the help to STDOUT and exits the program with EXIT_SUCCESS.
+ * This function prints the help to STDOUT.
+ *
+ * @returns EXIT_SUCCESS
  */
 int PrintHelp();
 
 /**
- * This procedure creates the client socket, sets socket's send and receive timeouts and
- * performs connection to the server with the specified hostname on the specified port.
- * This procedure also translate hostname (domain name) of server to the corresponding IP address, which is used in connection.
- * The content of the string where the "return_str" points is always errased and filled ONLY if error has occured.
- * If the string where the "return_str" points is empty after the procedure completes, NO error has occured.
+ * This function creates the client socket, sets socket's send and receive timeouts and performs connection to the server with the specified hostname on the specified port. This function also translates hostname (domain name) of server to the corresponding IP address, which is used in connection.
  *
  * @param sock pointer to the socket descriptor - after the socket is created, it's descriptor is written to the memory where "sock" points
  * @param hostname the server hostname
  * @param port the port number
- * @param return_str  pointer to return string - ONLY if error occured in the procedure, error message is written to the memory where "return_str" points
+ * @param sec send and receive timeout in seconds
+ * @param usec send and receive timeout in microseconds
+ * @returns EXIT_SUCCESS on success or EXIT_FAILURE if an error occured
  */
-int OpenConnection(int* sock, const char* hostname, int port, string* return_str);
+int OpenConnection(int* sock, const char* hostname, int port, time_t sec, time_t usec);
 
 /**
  *
@@ -99,11 +92,7 @@ void Cleanup(SSL_CTX** ctx, int* sock, SSL** ssl);
 /**
  *
  *
- * If the content of the string where the "return_str" points is "HTTP/1.1 200 OK", NO error has occured and data has been read successfully.
- * If the content of the string where the "return_str" points is "HTTP/1.1 500 Internal Server Error",
- * internal server error has occured and the restart of the SSL connection is necessary (data has NOT been read successfully).
- * If the content of the string where the "return_str" points is something else, we need to call procedure Cleanup() and ErrExit()
- * with the content of the string where the "return_str" points as parameter "err".
+ * If the content of the string where the "return_str" points is "HTTP/1.1 200 OK", NO error has occured and data has been read successfully. If the content of the string where the "return_str" points is "HTTP/1.1 500 Internal Server Error", internal server error has occured and the restart of the SSL connection is necessary (data has NOT been read successfully). If the content of the string where the "return_str" points is something else, an error has occured.
  *
  * @param ssl
  * @param received pointer to received string - data which has been read are copied from buffer to the memory where "received" points
@@ -128,9 +117,7 @@ string ToLower(string str);
 bool IsWhiteSpaceOrEmpty(string str);
 
 /**
- * This procedure splits a string "str" by the "delimiter" and fills the splitted strings into the vector where "list" points.
- * Splitted string is inserted into vector only if function IsWhiteSpaceOrEmpty() with the splitted string passed as parameter returns "false".
- * The content of the vector where the "list" points is always errased and then filled with new content.
+ * This procedure splits a string "str" by the "delimiter" and fills the splitted strings into the vector where "list" points. Splitted string is inserted into vector only if function IsWhiteSpaceOrEmpty() with the splitted string passed as parameter returns "false". The content of the vector where the "list" points is always errased and then filled with new content.
  *
  * @param str the string to be splitted
  * @param delimiter the delimiter by which the string is splitted
@@ -139,11 +126,7 @@ bool IsWhiteSpaceOrEmpty(string str);
 void SplitString(string str, string delimiter, vector<string>* list);
 
 /**
- * This procedure splits the array of JSON objects and fills them into the vector where "list" points.
- * Content of JSON object is inserted into vector only if function IsWhiteSpaceOrEmpty() with the content of JSON object passed as parameter returns "false".
- * The inner JSON objects which are inside of the main JSON objects are not inserted into the vector separately.
- * The content of the vector where the "list" points is always errased and then filled with new content.
- * If the array contains bad structured JSON objects (some of the curly brackets are missing), procedure ends and nothing is inserted into the vector.
+ * This procedure splits the array of JSON objects and fills them into the vector where "list" points. Content of JSON object is inserted into vector only if function IsWhiteSpaceOrEmpty() with the content of JSON object passed as parameter returns "false". The inner JSON objects which are inside of the main JSON objects are not inserted into the vector separately. The content of the vector where the "list" points is always errased and then filled with new content. If the array contains bad structured JSON objects (some of the curly brackets are missing), procedure ends and nothing is inserted into the vector.
  *
  * @param array the array of JSON objects to be splitted
  * @param list pointer to the vector of strings - JSON objects are written to the vector where "list" points
