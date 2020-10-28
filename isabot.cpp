@@ -614,7 +614,7 @@ int main(int argc, char** argv)
         }
 
 #ifdef DEBUG
-        cout << "# " << splitted_messages.size() << " new " << (splitted_messages.size() == 1 ? "message" : "messages") << " received..." << endl;
+        cout << "# " << splitted_messages.size() << " new " << (splitted_messages.size() == 1 ? "message" : "messages") << " received...";
 #endif
 
         if (regex_search(splitted_messages.at(0), match, r_id_whole)) { // actualizing the ID of last message => last received message is the first element in splitted_messages
@@ -626,6 +626,11 @@ int main(int argc, char** argv)
             }
         }
 
+#ifdef DEBUG
+        cout << "last message ID: " << last_message_id << endl;
+#endif
+
+        /* --------------------- PROCESSING OF RECEIVED MESSAGES -------------------- */
         for (int i = splitted_messages.size() - 1; i >= 0; i--) { // first received message is the last element in splitted messages
             // this loop is not affected by SIGINT => bot always send echoes to all received messages
             username.clear();
