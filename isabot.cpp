@@ -1,7 +1,7 @@
 /**
  * @file isabot.cpp
  *
- * @brief
+ * @brief This program functions as Discord bot, which sends echoes to all messages in text channel named "isa-bot", which have not been sent by this bot or by users that have substring "bot" in their username. This bot authorizes with a token of existing bot account, which must be authorized in only one Discord server, with only one text channel named "isa-bot".
  *
  * @author Radoslav Grenčík
  * Contact: xgrenc00@stud.fit.vutbr.cz
@@ -76,31 +76,42 @@ int ParseOpt(int argc, char** argv, char* access_token)
         return Error(BAD_OPTIONS, "");
     }
 
-    if (flag_access_token)
+    /* ---------------------- GOOD COMBINATIONS OF OPTIONS ---------------------- */
+    // (-t <access_token> && -v|--verbose) || -t <access_token>
+    // -h|--help && everything else
+    // -h|--help
+    // no option
+    /* ----------------------- BAD COMBINATIONS OF OPTIONS ---------------------- */
+    // -v|--verbose
+    else if ((flag_access_token && flag_verbose) || flag_access_token)
         return EXIT_SUCCESS;
-
-    return PrintHelp();
+    else if (flag_verbose)
+        return Error(BAD_OPTIONS, "bad combination of options - option '-v|--verbose' can be used only with option '-t <access_token>'");
+    else // no option
+        return PrintHelp();
 }
 
 int PrintHelp()
 {
-    cout << "USAGE: ./isabot [-h|--help] [-v|--verbose] [-t <access_token>]" << endl
+    cout << "USAGE: ./isabot [-h|--help] [-v|--verbose] -t <access_token>" << endl
          << endl
-         << "This program serves as discord bot, which sends echoes to all messages in text channel named \"isa-bot\"," << endl
-         << "only if these have been sent by users that don't have substring \"bot\" in their username." << endl
+         << "This program functions as Discord bot, which sends echoes to all messages in text channel named \"isa-bot\"," << endl
+         << "which have not been sent by this bot or by users that have substring \"bot\" in their username." << endl
+         << "This bot authorizes with a token of existing bot account, which must be authorized in only one Discord server," << endl
+         << "with only one text channel named \"isa-bot\"." << endl
          << endl
-         << "Bot must be previously authorized in only one discord server with only one \"isa-bot\" text channel!" << endl
-         << "For more info about creation and authorization of bot visit:" << endl
+         << "For more informations about creation and authorization of bot account visit:" << endl
          << "https://discordpy.readthedocs.io/en/latest/discord.html" << endl
          << endl
          << "OPTIONS:" << endl
          << "-h|--help            Show this help." << endl
          << "-v|--verbose         Print messages (to the STDOUT), to which the bot will send echoes, in format:" << endl
          << "                     <channel> - <username>: <message>" << endl
-         << "-t <access_token>    Token that the bot needs for authorization." << endl
+         << "-t <access_token>    Token of existing bot account, which is authorized in one Discord server." << endl
+         << "                     This token is needed for authorization of HTTP requests." << endl
          << endl
-         << "If no options were provided, this help will be displayed." << endl;
-    return EXIT_SUCCESS;
+         << "If no options have been used, this help is displayed." << endl;
+    return EXIT_HELP;
 }
 
 int OpenConnection(int* sock, const char* hostname, int port, time_t sec, time_t usec)
@@ -342,8 +353,14 @@ int main(int argc, char** argv)
     memset(access_token, 0, sizeof(access_token));
 
     return_code = ParseOpt(argc, argv, access_token); // parse the command line arguments (options)
-    if (return_code != EXIT_SUCCESS)
+    switch (return_code) {
+    case EXIT_SUCCESS:
+        break;
+    case EXIT_HELP: // "-h|--help" option has been used => return EXIT_SUCCESS
+        return EXIT_SUCCESS;
+    default:
         return return_code;
+    }
 
     SSL_CTX* ctx = NULL;
     int sock = -1;
@@ -360,6 +377,7 @@ int main(int argc, char** argv)
     string channel;
     string channel_id;
     string last_message_id;
+    string my_name; // name of this bot
     string SSL_read_return;
     vector<string> temp_list;
     const regex r_id_whole("(\"id\": \"[0-9]+\")");
@@ -499,6 +517,49 @@ int main(int argc, char** argv)
 #endif
     }
 
+    /* -------------------------------------------------------------------------- */
+    /*                            GET NAME OF THIS BOT                            */
+    /* -------------------------------------------------------------------------- */
+    if (keep_running) {
+        memset(buffer_request, 0, sizeof(buffer_request));
+        strcpy(buffer_request, "GET /api/v6/users/@me HTTP/1.1\r\nHost: discord.com\r\nAuthorization: Bot ");
+        strcat(buffer_request, access_token);
+        strcat(buffer_request, "\r\n\r\n");
+
+        if (SSL_write(ssl, buffer_request, strlen(buffer_request)) <= 0) {
+            Cleanup(&ctx, &sock, &ssl);
+            return Error(EXIT_FAILURE, "SSL_write() failed");
+        } // encrypt & send message
+        SSLReadAnswer(ssl, &received, &SSL_read_return);
+        if (SSL_read_return.compare("HTTP/1.1 200 OK") != 0) {
+            Cleanup(&ctx, &sock, &ssl);
+            return Error(EXIT_FAILURE, SSL_read_return);
+        }
+
+        if (regex_search(received, match, r_message_username)) {
+            my_name += match[0];
+            SplitString(my_name, "\", \"avatar\":", &temp_list);
+            if (temp_list.size() != 1) {
+                Cleanup(&ctx, &sock, &ssl);
+                return Error(EXIT_FAILURE, "bad answer from server");
+            }
+            my_name.clear();
+            my_name += temp_list.at(0);
+
+            SplitString(my_name, "\"username\": \"", &temp_list);
+            if (temp_list.size() != 1) {
+                Cleanup(&ctx, &sock, &ssl);
+                return Error(EXIT_FAILURE, "bad answer from server");
+            }
+            my_name.clear();
+            my_name += temp_list.at(0);
+        }
+
+#ifdef DEBUG
+        cout << "   - name of this bot: " << my_name << endl;
+#endif
+    }
+
 #ifdef DEBUG
     unsigned long long int request_counter = 0;
 #endif
@@ -631,6 +692,12 @@ int main(int argc, char** argv)
                 username += temp_list.at(0);
             }
 
+            if (username.compare(my_name) == 0) { // message from myself
+#ifdef DEBUG
+                cout << "isa-bot - Message from myself, skipping..." << endl;
+#endif
+                continue;
+            }
             if (ToLower(username).find("bot") != string::npos) { // if bot is a (CASE INSENSITIVE) substring in username => continue
 #ifdef DEBUG
                 cout << "isa-bot - Message from bot, skipping..." << endl;

@@ -25,6 +25,7 @@
 #include <vector>
 
 #define BAD_OPTIONS 99 // bad options error number
+#define EXIT_HELP 420
 
 #define BUFFER 8192 // 8KB
 #define HTTPS 443
@@ -46,16 +47,15 @@ int Error(int errnum, string err);
  *
  * @param argc the number of command line arguments (options)
  * @param argv the array of command line arguments (options)
- * @param access_token pointer to array of chars where the access token (to authorize the bot),
- * which was passed by the user through the -t <access_token> option, will be written
- * @returns EXIT_SUCCESS on success or BAD_OPTIONS if bad combination or number of options has been used
+ * @param access_token pointer to array of chars where the access token (to authorize the bot), which was passed by the user through the -t <access_token> option, will be written
+ * @returns EXIT_SUCCESS or return code of function PrintHelp() on success or BAD_OPTIONS if bad combination or number of options has been used
  */
 int ParseOpt(int argc, char** argv, char* access_token);
 
 /**
  * This function prints the help to STDOUT.
  *
- * @returns EXIT_SUCCESS
+ * @returns EXIT_HELP
  */
 int PrintHelp();
 
