@@ -17,6 +17,7 @@
 #include <netinet/in.h>
 #include <openssl/evp.h>
 #include <openssl/ssl.h>
+#include <poll.h>
 #include <regex>
 #include <signal.h>
 #include <string>
@@ -29,7 +30,6 @@
 
 #define BUFFER 8192 // 8KB
 #define HTTPS 443
-#define ONE_M_USEC 1000000 // one million microseconds
 
 using namespace std;
 
@@ -90,15 +90,13 @@ int Startup(SSL_CTX** ctx, int* sock, SSL** ssl);
 void Cleanup(SSL_CTX** ctx, int* sock, SSL** ssl);
 
 /**
- *
- *
- * If the content of the string where the "return_str" points is "HTTP/1.1 200 OK", NO error has occured and data has been read successfully. If the content of the string where the "return_str" points is "HTTP/1.1 500 Internal Server Error", internal server error has occured and the restart of the SSL connection is necessary (data has NOT been read successfully). If the content of the string where the "return_str" points is something else, an error has occured.
+ * This procedure tries to read data from a TLS/SSL connection. It actually calls the function SSL_read(), which reads the data into a buffer and these data are continuously copied into the string where "received" points. The function SSL_read() is called until some of these events happen...Some recoverable errors have occured,  The content of the strings where the "received" and "return_str" points is always errased and then filled with new content. After the procedure finishes, the content of the string where "received" points can contain received data, but it depends and it can be determined by the content of the string where "return_str" points. It can be following... If the content of the string where the "return_str" points is "HTTP/1.1 200 OK", NO error has occured and data has been read successfully. If the content of the string where the "return_str" points is "HTTP/1.1 500 Internal Server Error", internal server error has occured and the restart of the SSL connection is necessary (data has NOT been read successfully). If the content of the string where the "return_str" points is something else, an error has occured and error message is stored in the string.
  *
  * @param ssl
  * @param received pointer to received string - data which has been read are copied from buffer to the memory where "received" points
  * @param return_str pointer to return string - error message or HTTP return code is written to the memory where "return_str" points
  */
-void SSLReadAnswer(SSL* ssl, string* received, string* return_str);
+void SSLReadAnswer(SSL* ssl, int sock, string* received, string* return_str);
 
 /**
  * This function converts a string to lowercase.
