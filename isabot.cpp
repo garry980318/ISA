@@ -10,10 +10,8 @@
 #include "isabot.hpp"
 
 static volatile sig_atomic_t keep_running = 1;
-static bool restart_needed = false;
-static bool flag_verbose = false;
 #ifdef DEBUG
-static unsigned long long int request_counter = 0;
+unsigned long long int request_counter = 0;
 #endif
 
 void SIGINTHandler(int)
@@ -30,17 +28,14 @@ int Error(int errnum, string err)
         cerr << "Try 'isabot -h|--help' for more information." << endl;
         break;
     }
-#ifdef DEBUG
-    cout << "* Bot sent: " << request_counter << " requests." << endl;
-#endif
-
     return (errnum);
 }
 
-int ParseOpt(int argc, char** argv, char* access_token)
+int ParseOpt(int argc, char** argv, char* access_token, bool* flag_verbose)
 {
     int opt;
     bool flag_access_token = false;
+    *flag_verbose = false;
 
     while (true) {
         int option_index = 0;
@@ -58,8 +53,8 @@ int ParseOpt(int argc, char** argv, char* access_token)
         case 'h':
             return PrintHelp();
         case 'v':
-            if (flag_verbose == false)
-                flag_verbose = true;
+            if (*flag_verbose == false)
+                *flag_verbose = true;
             else
                 return Error(BAD_OPTIONS, "bad option - option '-v|--verbose' declared more than once");
             break;
@@ -90,9 +85,9 @@ int ParseOpt(int argc, char** argv, char* access_token)
     // no option
     /* ----------------------- BAD COMBINATIONS OF OPTIONS ---------------------- */
     // -v|--verbose
-    else if ((flag_access_token && flag_verbose) || flag_access_token)
+    else if ((flag_access_token && *flag_verbose) || flag_access_token)
         return EXIT_SUCCESS;
-    else if (flag_verbose)
+    else if (*flag_verbose)
         return Error(BAD_OPTIONS, "bad combination of options - option '-v|--verbose' can be used only with option '-t <access_token>'");
     else // no option
         return PrintHelp();
@@ -126,12 +121,12 @@ int OpenConnection(int* sock, const char* hostname, int port, time_t sec, time_t
     struct sockaddr_in server;
     memset(&server, 0, sizeof(server));
 
-    *sock = socket(AF_INET, SOCK_STREAM, 0); // create a client socket
+    *sock = socket(AF_INET, SOCK_STREAM, 0);
     if (*sock == -1)
         return Error(EXIT_FAILURE, "socket() failed");
 
     struct timeval timeout;
-    timeout.tv_sec = sec; // timeot for receiving and sending is 2s
+    timeout.tv_sec = sec;
     timeout.tv_usec = usec;
 
     if (setsockopt(*sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout)) < 0)
@@ -205,20 +200,21 @@ void Cleanup(SSL_CTX** ctx, int* sock, SSL** ssl)
 
 #ifdef DEBUG
     cout << endl
+         << "* Bot sent: " << request_counter << " requests." << endl
          << "* CLEANUP..." << endl;
 #endif
 }
 
-void SSLReadAnswer(SSL* ssl, int sock, string* received, string* return_str)
+int SSLReadAnswer(SSL_CTX** ctx, int* sock, SSL** ssl, string* received)
 {
     int bytes;
     char buffer_answer[BUFFER];
     vector<string> answer;
+    bool restart_needed = false;
     received->clear();
-    return_str->clear();
 
     struct pollfd pfds[1];
-    pfds[0].fd = sock;
+    pfds[0].fd = *sock;
     pfds[0].events = POLLIN;
     int poll_return;
     int poll_timeout = 500;
@@ -227,68 +223,89 @@ void SSLReadAnswer(SSL* ssl, int sock, string* received, string* return_str)
     while (true) {
         while (loop) { // the read loop
             memset(buffer_answer, 0, sizeof(buffer_answer));
-            bytes = SSL_read(ssl, buffer_answer, sizeof(buffer_answer) - 1); // get reply & decrypt
+            bytes = SSL_read(*ssl, buffer_answer, sizeof(buffer_answer) - 1);
             *received += buffer_answer;
 
             if (bytes <= 0) { // some error occurred
-                switch (SSL_get_error(ssl, bytes)) {
-                case SSL_ERROR_WANT_READ: // this one indicates, that nothing more can be read right now...
-                    loop = false; // the read loop can be interrupted
+                switch (SSL_get_error(*ssl, bytes)) {
+                case SSL_ERROR_WANT_READ: // this error indicates, that nothing more can be read right now...
+                    loop = false;
                     break;
                 case SSL_ERROR_ZERO_RETURN: // connection was closed
                 case SSL_ERROR_SYSCALL: // this is not recoverable fatal error
                 case SSL_ERROR_SSL: // this also
-                    restart_needed = true; // we need to restart the SSL connection
-                    loop = false; // the read loop must be interrupted
+                    restart_needed = true; // it's needed to restart the SSL connection
+                    loop = false;
                     break;
                 default:
-                    *return_str += "UNKNOWN ERROR";
-                    return;
+                    return Error(EXIT_FAILURE, "UNKNOWN ERROR");
                 }
             }
         }
-        if (restart_needed)
+        if (restart_needed) // poll() mustn't be performed
             break;
 
         // SSL_ERROR_WANT_READ => calling poll()
-        poll_return = poll(pfds, 1, poll_timeout); // timeout is 500msec
-        if (poll_return == 0) { // nothing more to read => break
-            if (received->size() == 0) { // nothing has been read
-                if (poll_timeout < 8000) { // if poll_timeout is les then 8sec, try to double the timeout
+        poll_return = poll(pfds, 1, poll_timeout);
+        if (poll_return == 0) { // poll() timeout expired
+            if (received->size() == 0) { // nothing has been read, try to double the timeout
+                if (poll_timeout < 8000) {
                     poll_timeout *= 2;
 #ifdef DEBUG
                     cout << endl
                          << "* Doubling poll() timeout to " << poll_timeout << " miliseconds..." << endl;
 #endif
-                    continue;
+                    continue; // read loop is skipped, because loop = false
                 }
-                *return_str += "nothing has been read from server";
-                return;
+                return Error(EXIT_FAILURE, "nothing has been read from server");
             }
             break;
-        } else if (poll_return == -1) { // poll() error => return
-            *return_str += "poll() failed";
-            return;
+        } else if (poll_return == -1) { // poll() error
+            if (keep_running)
+                return Error(EXIT_FAILURE, "poll() failed");
+            else
+                break; // SIGINT received, poll() probably failed, but the program is about to end and it doesn't matter - it's not an error in this case
         } else {
             if (pfds[0].revents & POLLIN) { // more to read
                 loop = true; // activate the read loop
-                poll_timeout = 500; // reset the poll timeout
 #ifdef DEBUG
                 cout << endl
-                     << "* READING MORE DATA, resetting poll() timeout to " << poll_timeout << " miliseconds..." << endl;
+                     << "* READING MORE DATA...";
 #endif
+                if (poll_timeout != 500) {
+                    poll_timeout = 500; // reset the poll timeout
+#ifdef DEBUG
+                    cout << "resetting poll() timeout to " << poll_timeout << " miliseconds..." << endl;
+#endif
+                }
                 continue;
             }
-            *return_str += "unexpected poll() return event";
-            return;
+            return Error(EXIT_FAILURE, "unexpected poll() return event");
         }
     }
 
     SplitString(*received, "\r\n", &answer);
     if (answer.size() < 1) // something unexpected, with only one line has been received
-        *return_str += "bad answer from server";
+        return Error(EXIT_FAILURE, "bad answer from server");
+
+    if ((answer.at(0).compare("HTTP/1.1 500 Internal Server Error") == 0) || restart_needed) {
+        Cleanup(ctx, sock, ssl);
+#ifdef DEBUG
+        if (restart_needed)
+            cout << "***** SSL fatal error/connection closed - RESTARTING *****" << endl;
+        else
+            cout << "***** Internal Server Error - RESTARTING *****" << endl;
+#endif
+        int return_code = Startup(ctx, sock, ssl);
+        if (return_code != EXIT_SUCCESS)
+            return return_code;
+    }
+    if (answer.at(0).compare("HTTP/1.1 500 Internal Server Error") == 0)
+        return EXIT_RESTART;
+    else if (answer.at(0).compare("HTTP/1.1 200 OK") == 0)
+        return EXIT_SUCCESS;
     else
-        *return_str += answer.at(0); // return first line of the answer => the HTTP return code
+        return Error(EXIT_FAILURE, answer.at(0));
 }
 
 string ToLower(string str)
@@ -378,13 +395,14 @@ void SplitArrayOfJSON(string array, vector<string>* list)
 
 int main(int argc, char** argv)
 {
-    signal(SIGINT, SIGINTHandler); // SIGINT handling with SIGINTHandler procedure
+    signal(SIGINT, SIGINTHandler); // SIGINT handling with SIGINTHandler() procedure
 
     int return_code;
     char access_token[512];
     memset(access_token, 0, sizeof(access_token));
+    bool flag_verbose;
 
-    return_code = ParseOpt(argc, argv, access_token); // parse the command line arguments (options)
+    return_code = ParseOpt(argc, argv, access_token, &flag_verbose); // parse the command line arguments (options)
     switch (return_code) {
     case EXIT_SUCCESS:
         break;
@@ -410,7 +428,6 @@ int main(int argc, char** argv)
     string channel_id;
     string last_message_id;
     string my_name; // name of this bot
-    string SSL_read_return;
     vector<string> temp_list;
     const regex r_id_whole("(\"id\": \"[0-9]+\")");
     const regex r_id_num("([0-9]+)");
@@ -434,11 +451,11 @@ int main(int argc, char** argv)
         if (SSL_write(ssl, buffer_request, strlen(buffer_request)) <= 0) {
             Cleanup(&ctx, &sock, &ssl);
             return Error(EXIT_FAILURE, "SSL_write() failed");
-        } // encrypt & send message
-        SSLReadAnswer(ssl, sock, &received, &SSL_read_return);
-        if (SSL_read_return.compare("HTTP/1.1 200 OK") != 0) {
+        }
+        return_code = SSLReadAnswer(&ctx, &sock, &ssl, &received);
+        if (return_code != EXIT_SUCCESS) {
             Cleanup(&ctx, &sock, &ssl);
-            return Error(EXIT_FAILURE, SSL_read_return);
+            return return_code;
         }
 
 #ifdef DEBUG
@@ -490,11 +507,11 @@ int main(int argc, char** argv)
         if (SSL_write(ssl, buffer_request, strlen(buffer_request)) <= 0) {
             Cleanup(&ctx, &sock, &ssl);
             return Error(EXIT_FAILURE, "SSL_write() failed");
-        } // encrypt & send message
-        SSLReadAnswer(ssl, sock, &received, &SSL_read_return);
-        if (SSL_read_return.compare("HTTP/1.1 200 OK") != 0) {
+        }
+        return_code = SSLReadAnswer(&ctx, &sock, &ssl, &received);
+        if (return_code != EXIT_SUCCESS) {
             Cleanup(&ctx, &sock, &ssl);
-            return Error(EXIT_FAILURE, SSL_read_return);
+            return return_code;
         }
 
 #ifdef DEBUG
@@ -530,12 +547,14 @@ int main(int argc, char** argv)
                     channel_id += match[0];
                 }
 
-                if (regex_search(channel, match, r_whole_last_message_id)) // obtaining the ID of last message from answer
+                /* -------------- obtaining the ID of last message from answer -------------- */
+                if (regex_search(channel, match, r_whole_last_message_id))
                     last_message_id += match[0];
                 if (regex_search(last_message_id, match, r_last_message_id)) {
                     last_message_id.clear();
                     last_message_id += match[0];
                 }
+                /* -------------------------------------------------------------------------- */
             }
             break;
         default:
@@ -561,11 +580,11 @@ int main(int argc, char** argv)
         if (SSL_write(ssl, buffer_request, strlen(buffer_request)) <= 0) {
             Cleanup(&ctx, &sock, &ssl);
             return Error(EXIT_FAILURE, "SSL_write() failed");
-        } // encrypt & send message
-        SSLReadAnswer(ssl, sock, &received, &SSL_read_return);
-        if (SSL_read_return.compare("HTTP/1.1 200 OK") != 0) {
+        }
+        return_code = SSLReadAnswer(&ctx, &sock, &ssl, &received);
+        if (return_code != EXIT_SUCCESS) {
             Cleanup(&ctx, &sock, &ssl);
-            return Error(EXIT_FAILURE, SSL_read_return);
+            return return_code;
         }
 
         if (regex_search(received, match, r_message_username)) {
@@ -603,7 +622,7 @@ int main(int argc, char** argv)
     string content;
     string attachment;
     char json_message[BUFFER / 2];
-    char json_message_size[5]; // lenght of json_message can be max 4095 => 4 chars + '\0'
+    char json_message_size[5]; // lenght of "json_message" can be max 4095 => 4 chars + '\0'
 
     /* -------------------------------------------------------------------------- */
     /*                                THE MAIN LOOP                               */
@@ -619,7 +638,7 @@ int main(int argc, char** argv)
         strcat(buffer_request, "/messages");
         if (last_message_id.compare("null") != 0) { // if there is no message in channel "isa-bot", last_message_id = null => request without "?after=..."
             strcat(buffer_request, "?after=");
-            strcat(buffer_request, last_message_id.c_str()); // we want to get all new messages which were posted => all messages after the message with the last_message_id
+            strcat(buffer_request, last_message_id.c_str()); // new messages which were posted => all messages after the message with the last_message_id
         }
         strcat(buffer_request, " HTTP/1.1\r\nHost: discord.com\r\nAuthorization: Bot ");
         strcat(buffer_request, access_token);
@@ -632,22 +651,13 @@ int main(int argc, char** argv)
         if (SSL_write(ssl, buffer_request, strlen(buffer_request)) <= 0) {
             Cleanup(&ctx, &sock, &ssl);
             return Error(EXIT_FAILURE, "SSL_write() failed");
-        } // encrypt & send message
-        SSLReadAnswer(ssl, sock, &received, &SSL_read_return);
-        if (SSL_read_return.compare("HTTP/1.1 200 OK") != 0) {
+        }
+        return_code = SSLReadAnswer(&ctx, &sock, &ssl, &received);
+        if (return_code == EXIT_RESTART) // no valid data has been received => continue in new iteration and receive valid data
+            continue;
+        if (return_code != EXIT_SUCCESS) {
             Cleanup(&ctx, &sock, &ssl);
-            if (SSL_read_return.compare("HTTP/1.1 500 Internal Server Error") == 0) { // sometimes the server returns this, and we need to restart the SSL connection
-#ifdef DEBUG
-                cout << "***** Internal Server Error - RESTARTING *****" << endl;
-#endif
-                return_code = Startup(&ctx, &sock, &ssl); // RESTART
-                if (return_code != EXIT_SUCCESS) {
-                    Cleanup(&ctx, &sock, &ssl);
-                    return return_code;
-                }
-                continue;
-            }
-            return Error(EXIT_FAILURE, SSL_read_return);
+            return return_code;
         }
 
         SplitString(received, "\r\n\r\n", &temp_list);
@@ -657,23 +667,10 @@ int main(int argc, char** argv)
         }
         all_messages += temp_list.at(1);
 
-        if (all_messages.compare("[]") == 0) { // no new messages received
-            if (!keep_running) // SIGINT received
-                break;
-            if (restart_needed) { // FATAL error in the SSL_read() has occurred or the connection was closed => restart of the SSL connection is necessary
-                restart_needed = false;
-                Cleanup(&ctx, &sock, &ssl);
-#ifdef DEBUG
-                cout << "***** SSL fatal error/connection closed - RESTARTING *****" << endl;
-#endif
-                return_code = Startup(&ctx, &sock, &ssl);
-                if (return_code != EXIT_SUCCESS) {
-                    Cleanup(&ctx, &sock, &ssl);
-                    return return_code;
-                }
-            }
+        /* ------------------------ no new messages received ------------------------ */
+        if (all_messages.compare("[]") == 0)
             continue;
-        }
+        /* -------------------------------------------------------------------------- */
 
         SplitArrayOfJSON(all_messages, &splitted_messages);
         if (splitted_messages.size() < 1) {
@@ -681,7 +678,9 @@ int main(int argc, char** argv)
             return Error(EXIT_FAILURE, "bad answer from server");
         }
 
-        if (regex_search(splitted_messages.at(0), match, r_id_whole)) { // actualizing the ID of last message => last received message is the first element in splitted_messages
+        /* --------------- actualizing the ID of last received message -------------- */
+        // the last received message is the first element in vector "splitted_messages"
+        if (regex_search(splitted_messages.at(0), match, r_id_whole)) {
             last_message_id.clear();
             last_message_id += match[0];
             if (regex_search(last_message_id, match, r_id_num)) {
@@ -689,6 +688,7 @@ int main(int argc, char** argv)
                 last_message_id += match[0];
             }
         }
+        /* -------------------------------------------------------------------------- */
 
 #ifdef DEBUG
         cout << endl
@@ -698,8 +698,9 @@ int main(int argc, char** argv)
 #endif
 
         /* --------------------- PROCESSING OF RECEIVED MESSAGES -------------------- */
-        for (int i = splitted_messages.size() - 1; i >= 0; i--) { // first received message is the last element in splitted messages
-            // this loop is not affected by SIGINT => bot always send echoes to all received messages
+        /* ------------------- this loop is not affected by SIGINT ------------------ */
+        /* ------------- bot always send echoes to all received messages ------------ */
+        for (int i = splitted_messages.size() - 1; i >= 0; i--) { // oldest received message is the last element in splitted messages
             username.clear();
             content.clear();
             attachment.clear();
@@ -729,7 +730,7 @@ int main(int argc, char** argv)
 #endif
                 continue;
             }
-            if (ToLower(username).find("bot") != string::npos) { // if bot is a (CASE INSENSITIVE) substring in username => continue
+            if (ToLower(username).find("bot") != string::npos) { // message from bot
 #ifdef DEBUG
                 cout << "isa-bot - Message from bot, skipping..." << endl;
 #endif
@@ -763,7 +764,8 @@ int main(int argc, char** argv)
             if (flag_verbose) // "-v|--verbose" option has been used
                 cout << "isa-bot - " << username << ": " << content << endl;
 
-            if (regex_search(splitted_messages.at(i), match, r_message_url)) { // this is bonus...bot can send proper echo (URL of attachment) to messages containing attachments
+            /* ----------- messages with attachments => get URL of attachment ----------- */
+            if (regex_search(splitted_messages.at(i), match, r_message_url)) {
                 attachment += match[0];
                 SplitString(attachment, "\"url\": \"", &temp_list);
                 if (temp_list.size() != 1) {
@@ -812,42 +814,15 @@ int main(int argc, char** argv)
             if (SSL_write(ssl, buffer_request, strlen(buffer_request)) <= 0) {
                 Cleanup(&ctx, &sock, &ssl);
                 return Error(EXIT_FAILURE, "SSL_write() failed");
-            } // encrypt & send message
+            }
 
 #ifdef DEBUG
             cout << "   - Echo to message sent..." << endl;
 #endif
 
-            SSLReadAnswer(ssl, sock, &received, &SSL_read_return);
-            if (SSL_read_return.compare("HTTP/1.1 200 OK") != 0) {
-                Cleanup(&ctx, &sock, &ssl);
-                if (SSL_read_return.compare("HTTP/1.1 500 Internal Server Error") == 0) { // sometimes the server returns this, and we need to restart the SSL connection
-#ifdef DEBUG
-                    cout << "***** Internal Server Error - RESTARTING *****" << endl;
-#endif
-                    return_code = Startup(&ctx, &sock, &ssl); // RESTART
-                    if (return_code != EXIT_SUCCESS) {
-                        Cleanup(&ctx, &sock, &ssl);
-                        return return_code;
-                    }
-                    continue;
-                }
-                return Error(EXIT_FAILURE, SSL_read_return);
-            }
-
-#ifdef DEBUG
-            cout << "   - Answer: " << SSL_read_return << endl;
-#endif
-        }
-        if (!keep_running) // SIGINT received
-            break;
-        if (restart_needed) { // FATAL error in the SSL_read() has occurred or the connection was closed => restart of the SSL connection is necessary
-            restart_needed = false;
-            Cleanup(&ctx, &sock, &ssl);
-#ifdef DEBUG
-            cout << "***** SSL fatal error/connection closed - RESTARTING *****" << endl;
-#endif
-            return_code = Startup(&ctx, &sock, &ssl);
+            return_code = SSLReadAnswer(&ctx, &sock, &ssl, &received);
+            if (return_code == EXIT_RESTART)
+                continue;
             if (return_code != EXIT_SUCCESS) {
                 Cleanup(&ctx, &sock, &ssl);
                 return return_code;
@@ -858,7 +833,6 @@ int main(int argc, char** argv)
     Cleanup(&ctx, &sock, &ssl);
 #ifdef DEBUG
     cout << "* EXIT SUCCESS..." << endl;
-    cout << "* Bot sent: " << request_counter << " requests." << endl;
 #endif
 
     return EXIT_SUCCESS;

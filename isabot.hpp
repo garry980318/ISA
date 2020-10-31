@@ -10,6 +10,7 @@
 #ifndef ISABOT_HPP_
 #define ISABOT_HPP_
 
+/* -------------------------------- libraries ------------------------------- */
 #include <arpa/inet.h>
 #include <getopt.h>
 #include <iostream>
@@ -25,10 +26,13 @@
 #include <unistd.h>
 #include <vector>
 
-#define BAD_OPTIONS 99 // bad options error number
-#define EXIT_HELP 420
+/* ------------------------------- ERROR codes ------------------------------ */
+#define BAD_OPTIONS 420
+#define EXIT_HELP 421
+#define EXIT_RESTART 422
 
-#define BUFFER 8192 // 8KB
+/* ------------------------------ other macros ------------------------------ */
+#define BUFFER 8192
 #define HTTPS 443
 
 using namespace std;
@@ -43,14 +47,15 @@ using namespace std;
 int Error(int errnum, string err);
 
 /**
- * This function parses the command line arguments (options). If "-v|--verbose" option has been used, it sets the "flag_verbose" to "true". If no option has been used, PrintHelp() function is called and it's return value is returned.
+ * This function parses the command line arguments (options). If "-v|--verbose" option has been used, it sets the bool where "flag_verbose" points to "true". If no option has been used, PrintHelp() function is called and it's return value is returned.
  *
  * @param argc the number of command line arguments (options)
- * @param argv the array of command line arguments (options)
- * @param access_token pointer to array of chars where the access token (to authorize the bot), which was passed by the user through the -t <access_token> option, will be written
- * @returns EXIT_SUCCESS or return code of function PrintHelp() on success or BAD_OPTIONS if bad combination or number of options has been used
+ * @param argv the array of command line arguments/strings (options)
+ * @param access_token pointer to array of chars where the access token (to authorize the bot), which was passed by the user through the "-t <access_token>" option, will be written
+ * @param flag_verbose pointer to "flag_verbose"
+ * @returns EXIT_SUCCESS/return code of function PrintHelp() on success or BAD_OPTIONS if bad combination or number of options has been used
  */
-int ParseOpt(int argc, char** argv, char* access_token);
+int ParseOpt(int argc, char** argv, char* access_token, bool* flag_verbose);
 
 /**
  * This function prints the help to STDOUT.
@@ -90,13 +95,15 @@ int Startup(SSL_CTX** ctx, int* sock, SSL** ssl);
 void Cleanup(SSL_CTX** ctx, int* sock, SSL** ssl);
 
 /**
- * This procedure tries to read data from a TLS/SSL connection. It actually calls the function SSL_read(), which reads the data into a buffer and these data are continuously copied into the string where "received" points. The function SSL_read() is called until some of these events happen...Some recoverable errors have occured,  The content of the strings where the "received" and "return_str" points is always errased and then filled with new content. After the procedure finishes, the content of the string where "received" points can contain received data, but it depends and it can be determined by the content of the string where "return_str" points. It can be following... If the content of the string where the "return_str" points is "HTTP/1.1 200 OK", NO error has occured and data has been read successfully. If the content of the string where the "return_str" points is "HTTP/1.1 500 Internal Server Error", internal server error has occured and the restart of the SSL connection is necessary (data has NOT been read successfully). If the content of the string where the "return_str" points is something else, an error has occured and error message is stored in the string.
+ * This function tries to read data from a TLS/SSL connection. It actually calls the function SSL_read(), which reads the data into a buffer and these data are continuously copied into the string where "received" points. The function SSL_read() is called until some of these events happen...Connection was closed or fatal error has occured => restart of SSL connection is performed; no more data can be read right now => poll() is used on the underlying socket. The content of the string where the "received" points is always errased and then filled with new content. After the procedure finishes, the content of the string where "received" points can contain received data, but it depends and it can be determined by return code => EXIT_RESTART means that the string where the "received" points does NOT contain valid received data and other return codes mean otherwise.
  *
+ * @param ctx
+ * @param sock pointer to the socket descriptor
  * @param ssl
  * @param received pointer to received string - data which has been read are copied from buffer to the memory where "received" points
- * @param return_str pointer to return string - error message or HTTP return code is written to the memory where "return_str" points
+ * @returns EXIT_SUCCESS on success, EXIT_FAILURE on failure, EXIT_RESTART if internal server error has occurred => string where the "received" points does NOT contain valid received data
  */
-void SSLReadAnswer(SSL* ssl, int sock, string* received, string* return_str);
+int SSLReadAnswer(SSL_CTX** ctx, int* sock, SSL** ssl, string* received);
 
 /**
  * This function converts a string to lowercase.
@@ -110,7 +117,7 @@ string ToLower(string str);
  * This function checkes if the passed string is empty or contains only whitespace characters.
  *
  * @param str the string to be checked
- * @returns "true" if the string is empty or contains only whitespace characters or "false" otherwise
+ * @returns "true" if the string is empty/contains only whitespace characters or "false" otherwise
  */
 bool IsWhiteSpaceOrEmpty(string str);
 
