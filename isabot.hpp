@@ -29,7 +29,7 @@
 /* ------------------------------- ERROR codes ------------------------------ */
 #define BAD_OPTIONS 420
 #define EXIT_HELP 421
-#define EXIT_RESTART 422
+#define EXIT_SERVER_ERROR 422
 
 /* ------------------------------ other macros ------------------------------ */
 #define BUFFER 8192
@@ -77,16 +77,17 @@ int PrintHelp();
 int OpenConnection(int* sock, const char* hostname, int port, time_t sec, time_t usec);
 
 /**
- *
+ * TODO
  *
  * @param ctx
  * @param sock pointer to the socket decriptor
  * @param ssl
+ * @returns EXIT_SUCCESS on success or EXIT_FAILURE if an error occured
  */
 int Startup(SSL_CTX** ctx, int* sock, SSL** ssl);
 
 /**
- *
+ * TODO
  *
  * @param ctx
  * @param sock pointer to the socket descriptor
@@ -95,13 +96,23 @@ int Startup(SSL_CTX** ctx, int* sock, SSL** ssl);
 void Cleanup(SSL_CTX** ctx, int* sock, SSL** ssl);
 
 /**
- * This function tries to read data from a TLS/SSL connection. It actually calls the function SSL_read(), which reads the data into a buffer and these data are continuously copied into the string where "received" points. The function SSL_read() is called until some of these events happen...Connection was closed or fatal error has occured => restart of SSL connection is performed; no more data can be read right now => poll() is used on the underlying socket. The content of the string where the "received" points is always errased and then filled with new content. After the procedure finishes, the content of the string where "received" points can contain received data, but it depends and it can be determined by return code => EXIT_RESTART means that the string where the "received" points does NOT contain valid received data and other return codes mean otherwise.
+ * This function performs restart of SSL connection by calling procedure Cleanup() and then function Startup().
+ *
+ * @param ctx
+ * @param sock pointer to the socket decriptor
+ * @param ssl
+ * @returns exit code of function Startup()
+ */
+int Restart(SSL_CTX** ctx, int* sock, SSL** ssl);
+
+/**
+ * This function tries to read data from a TLS/SSL connection. It actually calls the function SSL_read(), which reads the data into a buffer and these data are continuously copied into the string where "received" points. The function SSL_read() is called in read loop until some of these events happen...1) Connection was closed or fatal error has occured => restart of SSL connection is performed by calling function Restart(); 2) No more data can be read right now. After the read loop has been broken poll() is used on the underlying socket to ensure that all data has been read. The content of the string where the "received" points is always errased and then filled with new content. After the function finishes, the content of the string where "received" points can contain received data, but it depends and it can be determined by return code => EXIT_SERVER_ERROR means that the string where the "received" points does NOT contain valid received data and other return codes mean otherwise.
  *
  * @param ctx
  * @param sock pointer to the socket descriptor
  * @param ssl
  * @param received pointer to received string - data which has been read are copied from buffer to the memory where "received" points
- * @returns EXIT_SUCCESS on success, EXIT_FAILURE on failure, EXIT_RESTART if internal server error has occurred => string where the "received" points does NOT contain valid received data
+ * @returns EXIT_SUCCESS on success, EXIT_FAILURE on failure, EXIT_SERVER_ERROR if internal server error has occurred => string where the "received" points does NOT contain valid received data
  */
 int SSLReadAnswer(SSL_CTX** ctx, int* sock, SSL** ssl, string* received);
 

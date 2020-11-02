@@ -160,7 +160,7 @@ int Startup(SSL_CTX** ctx, int* sock, SSL** ssl)
         return Error(EXIT_FAILURE, "SSL_CTX_new() failed");
 
     int return_code;
-    return_code = OpenConnection(sock, "discord.com", HTTPS, 1, 500000);
+    return_code = OpenConnection(sock, "discord.com", HTTPS, 1, 0);
     if (return_code != EXIT_SUCCESS)
         return return_code;
 
@@ -200,17 +200,27 @@ void Cleanup(SSL_CTX** ctx, int* sock, SSL** ssl)
 
 #ifdef DEBUG
     cout << endl
-         << "* Bot sent: " << request_counter << " requests." << endl
+         << "* Bot sent " << request_counter << " requests until now." << endl
          << "* CLEANUP..." << endl;
 #endif
+}
+
+int Restart(SSL_CTX** ctx, int* sock, SSL** ssl)
+{
+#ifdef DEBUG
+    cout << "----- RESTARTING -----";
+#endif
+
+    Cleanup(ctx, sock, ssl);
+    return Startup(ctx, sock, ssl);
 }
 
 int SSLReadAnswer(SSL_CTX** ctx, int* sock, SSL** ssl, string* received)
 {
     int bytes;
+    int return_code;
     char buffer_answer[BUFFER];
     vector<string> answer;
-    bool restart_needed = false;
     received->clear();
 
     struct pollfd pfds[1];
@@ -233,8 +243,15 @@ int SSLReadAnswer(SSL_CTX** ctx, int* sock, SSL** ssl, string* received)
                     break;
                 case SSL_ERROR_ZERO_RETURN: // connection was closed
                 case SSL_ERROR_SYSCALL: // this is not recoverable fatal error
-                case SSL_ERROR_SSL: // this also
-                    restart_needed = true; // it's needed to restart the SSL connection
+                case SSL_ERROR_SSL: // this also...it's needed to restart the SSL connection
+#ifdef DEBUG
+                    cout << endl
+                         << "!!! SSL fatal error/connection closed..." << endl;
+#endif
+                    return_code = Restart(ctx, sock, ssl);
+                    if (return_code != EXIT_SUCCESS)
+                        return return_code;
+
                     loop = false;
                     break;
                 default:
@@ -242,24 +259,25 @@ int SSLReadAnswer(SSL_CTX** ctx, int* sock, SSL** ssl, string* received)
                 }
             }
         }
-        if (restart_needed) // poll() mustn't be performed
-            break;
 
-        // SSL_ERROR_WANT_READ => calling poll()
+        /* -------------------- USE poll() ON THE UNDERLYING SOCKET ------------------- */
         poll_return = poll(pfds, 1, poll_timeout);
         if (poll_return == 0) { // poll() timeout expired
-            if (received->size() == 0) { // nothing has been read, try to double the timeout
-                if (poll_timeout < 8000) {
+            if (received->size() == 0) { // nothing has been read, try to double the timeout (maximum timeout is 16sec)
+#ifdef DEBUG
+                cout << endl
+                     << "!!! Nothing has been read..." << endl;
+#endif
+                if (poll_timeout < 12000) { // the last time when timeout is going to be doubled is when timeout = 8000
                     poll_timeout *= 2;
 #ifdef DEBUG
-                    cout << endl
-                         << "* Doubling poll() timeout to " << poll_timeout << " miliseconds..." << endl;
+                    cout << "    - Doubling poll() timeout to " << poll_timeout << " miliseconds..." << endl;
 #endif
                     continue; // read loop is skipped, because loop = false
                 }
                 return Error(EXIT_FAILURE, "nothing has been read from server");
             }
-            break;
+            break; // some data has been read => break
         } else if (poll_return == -1) { // poll() error
             if (keep_running)
                 return Error(EXIT_FAILURE, "poll() failed");
@@ -270,12 +288,12 @@ int SSLReadAnswer(SSL_CTX** ctx, int* sock, SSL** ssl, string* received)
                 loop = true; // activate the read loop
 #ifdef DEBUG
                 cout << endl
-                     << "* READING MORE DATA...";
+                     << "* READING MORE DATA..." << endl;
 #endif
                 if (poll_timeout != 500) {
                     poll_timeout = 500; // reset the poll timeout
 #ifdef DEBUG
-                    cout << "resetting poll() timeout to " << poll_timeout << " miliseconds..." << endl;
+                    cout << "    - resetting poll() timeout to " << poll_timeout << " miliseconds" << endl;
 #endif
                 }
                 continue;
@@ -284,25 +302,19 @@ int SSLReadAnswer(SSL_CTX** ctx, int* sock, SSL** ssl, string* received)
         }
     }
 
+    /* ----------------- SPLIT THE ANSWER - GET HTTP RETURN CODE ---------------- */
     SplitString(*received, "\r\n", &answer);
     if (answer.size() < 1) // something unexpected, with only one line has been received
         return Error(EXIT_FAILURE, "bad answer from server");
 
-    if ((answer.at(0).compare("HTTP/1.1 500 Internal Server Error") == 0) || restart_needed) {
-        Cleanup(ctx, sock, ssl);
+    /* --------------------------------- RETURN --------------------------------- */
+    if (answer.at(0).compare("HTTP/1.1 500 Internal Server Error") == 0) {
 #ifdef DEBUG
-        if (restart_needed)
-            cout << "***** SSL fatal error/connection closed - RESTARTING *****" << endl;
-        else
-            cout << "***** Internal Server Error - RESTARTING *****" << endl;
+        cout << endl
+             << "----- EXIT_SERVER_ERROR -----" << endl;
 #endif
-        int return_code = Startup(ctx, sock, ssl);
-        if (return_code != EXIT_SUCCESS)
-            return return_code;
-    }
-    if (answer.at(0).compare("HTTP/1.1 500 Internal Server Error") == 0)
-        return EXIT_RESTART;
-    else if (answer.at(0).compare("HTTP/1.1 200 OK") == 0)
+        return EXIT_SERVER_ERROR;
+    } else if (answer.at(0).compare("HTTP/1.1 200 OK") == 0)
         return EXIT_SUCCESS;
     else
         return Error(EXIT_FAILURE, answer.at(0));
@@ -489,7 +501,7 @@ int main(int argc, char** argv)
         }
 
 #ifdef DEBUG
-        cout << "   - Guild ID: " << guild_id << endl;
+        cout << "    - Guild ID: " << guild_id << endl;
 #endif
     }
 
@@ -563,8 +575,8 @@ int main(int argc, char** argv)
         }
 
 #ifdef DEBUG
-        cout << "   - \"isa-bot\" channel ID: " << channel_id << endl;
-        cout << "   - last message ID: " << last_message_id << endl;
+        cout << "    - \"isa-bot\" channel ID: " << channel_id << endl;
+        cout << "    - last message ID: " << last_message_id << endl;
 #endif
     }
 
@@ -607,7 +619,7 @@ int main(int argc, char** argv)
         }
 
 #ifdef DEBUG
-        cout << "   - name of this bot: " << my_name << endl;
+        cout << "    - name of this bot: " << my_name << endl;
 #endif
     }
 
@@ -653,7 +665,7 @@ int main(int argc, char** argv)
             return Error(EXIT_FAILURE, "SSL_write() failed");
         }
         return_code = SSLReadAnswer(&ctx, &sock, &ssl, &received);
-        if (return_code == EXIT_RESTART) // no valid data has been received => continue in new iteration and receive valid data
+        if (return_code == EXIT_SERVER_ERROR) // no valid data has been received => continue in new iteration and receive valid data
             continue;
         if (return_code != EXIT_SUCCESS) {
             Cleanup(&ctx, &sock, &ssl);
@@ -817,11 +829,11 @@ int main(int argc, char** argv)
             }
 
 #ifdef DEBUG
-            cout << "   - Echo to message sent..." << endl;
+            cout << "    - Echo to message sent" << endl;
 #endif
 
             return_code = SSLReadAnswer(&ctx, &sock, &ssl, &received);
-            if (return_code == EXIT_RESTART)
+            if (return_code == EXIT_SERVER_ERROR)
                 continue;
             if (return_code != EXIT_SUCCESS) {
                 Cleanup(&ctx, &sock, &ssl);
