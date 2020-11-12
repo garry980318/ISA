@@ -1,4 +1,10 @@
-manual.docx
 README
 isabot
-xgrenc00.tar
+*.tar
+*.synctex.gz
+*.aux
+*.bbl
+*.blg
+*.log
+*.out
+*.toc
