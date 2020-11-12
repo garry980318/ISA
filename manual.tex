@@ -1,477 +1,155 @@
-% Author: Radoslav Grenčík xgrenc00@stud.fit.vutbr.cz
-
+% ----------- Author: Radoslav Grenčík, xgrenc00@stud.fit.vutbr.cz ----------- %
 
 \documentclass[a4paper, 11pt]{article}
-
-
-\usepackage[czech]{babel}
+\usepackage[slovak]{babel}
 \usepackage[utf8]{inputenc}
 \usepackage[left=2cm, top=3cm, text={17cm, 24cm}]{geometry}
 \usepackage{times}
 \usepackage{graphicx}
+\usepackage{csquotes}
+\MakeOuterQuote{"}
 \usepackage[hyphens]{url}
-\usepackage[unicode, colorlinks, hypertexnames=false, citecolor=blue]{hyperref}
-\usepackage[czech, boxed]{algorithm2e}
-\usepackage[perpage]{footmisc}
 \usepackage{hyperref}
+\hypersetup{hidelinks}
+\usepackage[perpage]{footmisc}
 \usepackage{multirow}
 \usepackage[normalem]{ulem}
 \useunder{\uline}{\ul}{}
 
-
 \begin{document}
-%##########################################################################%
-% TITLE PAGE
-%##########################################################################%
+
+% ---------------------------------------------------------------------------- %
+%                                  TITLE PAGE                                  %
+% ---------------------------------------------------------------------------- %
 \begin{titlepage}
 	\begin{center}
 		\includegraphics[width=0.77 \linewidth]{FIT_logo.pdf}
 
 		\vspace{\stretch{0.382}}
 
-		\Huge{Simulačná štúdia} \\
-		\LARGE{\textbf{Varianta 9: Plasty}} \\
+		\huge{ISA 2020/21 - Projektová dokumentácia} \\
+		\LARGE{\textbf{Variant: Discord bot}}
 
 		\vspace{\stretch{0.618}}
 	\end{center}
-
-	\begin{minipage}{0.5 \textwidth}
-		\Large
-		\today
+	\begin{minipage}{0.25 \textwidth}
+		\begin{flushleft}
+			\Large
+			\today
+		\end{flushleft}
 	\end{minipage}
 	\hfill
-	\begin{minipage}[r]{0.5 \textwidth}
-		\Large
-		\begin{tabular}{ll}
-			Radoslav Grenčík & (xgrenc00) \\
-			Róbert Hubinák   & (xhubin03)
-		\end{tabular}
+	\begin{minipage}{0.65 \textwidth}
+		\begin{flushright}
+			\Large
+			Radoslav Grenčík, \\
+			\large
+			\texttt{\href{mailto:xgrenc00@stud.fit.vutbr.cz}{xgrenc00@stud.fit.vutbr.cz}}
+		\end{flushright}
 	\end{minipage}
 \end{titlepage}
 
-
-
-%##########################################################################%
-% TABLE OF CONTENTS
-%##########################################################################%
+% ---------------------------------------------------------------------------- %
+%                               TABLE OF CONTENTS                              %
+% ---------------------------------------------------------------------------- %
 \clearpage
 \thispagestyle{empty}
 \tableofcontents
 
-
-
-%##########################################################################%
-%##########################################################################%
+% ---------------------------------------------------------------------------- %
+% ---------------------------------------------------------------------------- %
+% ---------------------------------------------------------------------------- %
 \clearpage
 \pagenumbering{arabic}
-\setcounter{page}{1}
+\setcounter{page}{3}
 
-\section{Úvod}
+\section{Uvedenie do problematiky}
 
-V tejto práci sa rozoberá problém plastov na našej planéte. Cieľom práce je
-vytvoriť model, ktorý popisuje kritickú situáciu s prebytkom plastového odpadu
-na našej planéte. V práci sa rozoberá hlavne problém s jednoúčelovými a jednorázovými
-plastovými výrobkami ako sú rôzne obaly poprípade iné jednorázové výrobky. Tieto
-výrobky tvoria najväčšiu časť plastového odpadu. V práci sa vyskytujú rôzne
-experimenty, ktorých zmyslom je demonštrovať, čo sa stane ak okamžite neznížime
-produkciu plastového odpadu, ako na množstvo plastového odpadu vplýva recyklácia
-a iné faktory.
+Cieľom tohto projektu je vytvoriť prenositeľnú konzolovú aplikáciu, ktorá pomocou existujúceho "bot" účtu posiela echo odozvy na všetky správy, ktoré zaznamená v textovom kanáli \texttt{isa-bot}. Spomínaný "bot" účet, musí byť vytvorený na platforme Discord \cite{discord} a musí byť autorizovaný v nejakom servere, ktorý je takisto vytvorený na platforme Discord \cite{discord}. Postup vytvorenia a autorizovania "bot" účtu je popísaný na tejto adrese \cite{creating_a_bot}.
 
-\subsection{Autori, zdroje}
+Aplikácia posiela echo odozvy na všetky správy, ktoré nie sú poslané ňou samou, alebo nie sú poslané iným botom (botom sa rozumie užívateľ, ktorého užívateľské meno obsahuje reťazec "bot"). Echo odozvy sú posielané v tvare: \texttt{echo: <username> - <message>}.
 
-Projekt vypracovali študenti VUT FIT v Brne Radoslav Grenčík a Róbert Hubinák.
-
-K vypracovaniu projektu boli využité poznatky a študijné texty z predmetu
-Modelování a simulace \cite{IMS_slides}, ktorý sa vyučuje na VUT FIT v Brne. Ako zdroj údajov
-slúžili rôzne štúdie a články na internete a takisto vlastné meranie.
-
-\subsection{Overovanie validity modelu}
-
-Validita modelu bola overovaná experimentovaním a porovnávaním výsledkov s
-reálnymi nameranými dátami, ktoré boli čerpané z overených zdrojov.
-
-%##########################################################################%
-%##########################################################################%
-\section{Rozbor témy a použitých metód/technológií}
-
-Systém modeluje životný cyklus plastu - od jeho vzniku až po rozklad.
-Podľa článku na portále \textbf{Euractiv} \cite{plastic_Europe} celosvetová produkcia
-plastu stúpa v roku 2018 bolo vyrobených 359 miliónov ton plastu, čo je 3,2\%
-nárast oproti roku 2017.
-
-Vyprodukovaný plast môže byť stále použitý, môže sa z neho stať odpad, môže byť
-spálený alebo zrecyklovaný. Podľa článkov na portáloch \textbf{Our World in Data} \cite{plastic_pollution_stats}
-a \textbf{ScienceAdvances} \cite{plastic_sciencemag} je približne 30\% plastu stále použitých, približne 56\%
-je odpad, približne 8\% je spálených a len približne 6\% je zrecyklovaných.
-Ďalej je v týchto článkoch spomenutý fakt, že približne 20\% zo zrecyklovaného
-odpadu sa znovu použije, takisto približne 20\% sa spáli a až 60\% zrecyklovaného
-odpadu ide na skládky.
-
-Podľa grafov z portálu \textbf{European Parliamentary Research Service Blog} \cite{plastic_graph}
-je väčšina plastového odpadu tvorená hlavne plastovými obalmi a druhé miesto
-tvoria rôzne plastové výrobky nespadajúce do katégorií: elektronika,
-automobilový priemysel ani stavebníctvo. Model sa preto zameriava práve na spomínaný
-druh plastového odpadu. Podľa článku na portále \textbf{EcoWatch} \cite{beach_cleanup}
-je práve top 10 nájdených vecí pri medzinárodnom čistení pláží hnutím Ocean Conservancy
-v roku 2018 plastový odpad a to hlavne cigaretové ohorky a rôzne plastové obaly
-alebo iné jednorázové produkty z plastu.
-
-\subsection{Použité postupy}
-Pre vytvorenie simulačného modelu sme využili programovací jazyk C++ a klinžnicu SIMLIB \cite{SIMLIB}. Tieto technológie sú vhodné na riešenie nášho problému. Ďalej boli použité postupy popísané v prednáškach k predmetu Modelování a simulace \cite{IMS_slides} na VUT FIT v Brne pre vytvorenie Petriho siete a programovanie v SIMLIBE \cite{SIMLIB}.
-
-\subsection{Popis pôvodu použitých metód a technológii}
-Boli použité štandardné knižnice jazyka C++ a knižnica SIMLIB \cite{SIMLIB} pre implementovanie Petriho siete v simulačnom modeli. Autormi knižnice SIMLIB \cite{SIMLIB} sú Petr Peringer, David Leska a David Martinek. Ako nástroj pre preklad bol použitý GNU Make \cite{make}.
-
-%##########################################################################%
-%##########################################################################%
-\section{Koncepcia metódy, prístupu, modelu}
-\label{model:uvod}
-
-Údaj o celosvetovej produkcii plastu bol zjednodušený a v simulačnom modeli sa
-generuje každý deň 1 milión ton plastu čo je vo výsledku 365 miliónov ton
-plastu ročne. V simulačnom modeli sa dá nastaviť ročný prírastok v produkcii
-plastu. Priestupné roky zanedbávame pretože pri takomto množstve je tento
-údaj zanedbateľný. Simulačný model si sám počíta čas, za ktorý sa generuje 1
-milión ton plastu na základe ročnej produkcie plastu.
-
-V článku na portále \textbf{EcoWatch} \cite{beach_cleanup} sú spomenuté množstvá jednotlivých
-vyzbieraných vecí pri medzinárodnom čistení pláží v roku 2018. Na základe týchto množstiev a vlastného merania - približná hmotnosť
-predmetov bola získaná vážením rôznych zástupcov určitého druhu a spriemerovaním - bola
-vypočítaná celková hmotnosť nájdených predmetov v jednotlivých kategóriách.
-Nasledovne boli predmety zoskupené do kategórií podľa doby rozkladu.
-Údaje o dobách rozkladu boli problematickým údajom, pretože sa na rôznych stránkach
-vyskytujú rôzne údaje. Údaje získané z nasledovných stránok nie sú úplne presné,
-avšak pre vytvorenie si predstavy o probléme s plastovým odpadom sú dostačujúce.
-Údaje boli získané z nasledovných stránok \cite{decomposition1}, \cite{decomposition2}, \cite{decomposition3}, \cite{decomposition4}, \cite{decomposition5}.
-Výsledky sú v tabuľke \ref{tab:1}.
-
-\begin{table}[ht]
-	\centering
-	\begin{tabular}{llllll}
-		\textbf{}                          & \textbf{MNOŽSTVO}                  & \textbf{\begin{tabular}[c]{@{}l@{}}KUSOVÁ\\ HMOTNOSŤ\end{tabular}} & \textbf{\begin{tabular}[c]{@{}l@{}}CELKOVÁ\\ HMOTNOSŤ\end{tabular}} & \textbf{\begin{tabular}[c]{@{}l@{}}DOBA\\ ROZKLADU\end{tabular}} & \textbf{KATEGÓRIA} \\ \hline
-		\textbf{\begin{tabular}[c]{@{}l@{}}cigaretový ohorok/\\ drobný odpad\end{tabular}} & 2412151                            & 1,4 g                              & 3377 kg                            & 5-10 rokov                         & A                  \\ \hline
-		\textbf{slamka}                    & 643562                             & 0,42 g                             & 270 kg                             & 200 rokov                          & B                  \\ \hline
-		\textbf{PET fľaša}                 & 1569135                            & 30 g                               & 47074 kg                           & 450 rokov                          & \multirow{4}{*}{C} \\
-		\textbf{PET vrchnák}               & 1091107                            & 2 g                                & 2182 kg                            & 450 rokov                          &                    \\
-		\textbf{plastový vrchnák}          & 624878                             & 3 g                                & 1874 kg                            & 450 rokov                          &                    \\
-		\textbf{\begin{tabular}[c]{@{}l@{}}"take away"\\ box z plastu\end{tabular}} & 632874                             & 4,5 g                              & 2848 kg                            & 450 rokov                          &                    \\ \hline
-		\textbf{igelitová taška}           & 757523                             & 5,5 g                              & 4166 kg                            & 20 rokov                           & \multirow{3}{*}{D} \\
-		\textbf{plastové vrece}            & 746211                             & 5,5 g                              & 4104 kg                            & 20 rokov                           &                    \\
-		\textbf{fólia/drobný obal}         & 1739743                            & 2 g                                & 3479 kg                            & 20 rokov                           &                    \\ \hline
-		\textbf{\begin{tabular}[c]{@{}l@{}}"take away"\\ box z peny\end{tabular}} & 580570                             & 4,5 g                              & 2612 kg                            & 50-80 rokov                        & E                  \\
-		\multicolumn{3}{r}{{\ul SPOLU:}}   & \multicolumn{3}{l}{{\ul 71986 kg}}
-	\end{tabular}
-	\caption{Tabuľka top 10 nájdených predmetov a výsledky meraní}
-	\label{tab:1}
-\end{table}
-
-Nakoniec bola vypočítaná percentuálna zastúpenosť jednotlivých kategórií v
-celkovej hmotnosti vyzbieraného odpadu. Kategória A má zastúpenie 5\%, kategória B 0,4\%,
-kategória C 75\%, kategória D 16\% a kategória E 3,6\%. Tieto údaje boli použité pri tvorbe
-Petriho siete \ref{appendix:petri_net}.
-
-\subsection{Popis konceptuálneho modelu}
-
-Na vstupe modelu - príloha \ref{appendix:petri_net} sa nachádza časovaný prechod
-s dĺžkou prechodu 1 deň. Za túto časovú jednotku sa na vstupe vygeneruje 1 milión
-ton plastu. Plast potom môže prejsť do 4 stavov:
-\begin{itemize}
-	\item pravdepodobnosť 35\% - Plast sa znovu použije a posiela sa na vstup systému.
-	\item pravdepodobnosť 56\% - Plast sa stáva odpadom a môže ďalej prejsť do 5 stavov.
-	\item pravdepodobnosť 8\% - Plast sa spáli a stáva sa rozloženým - opúšťa systém.
-	\item pravdepodobnosť 6\% - Plast sa pošle na recykláciu a môže ďalej prejsť do 3 stavov.
-\end{itemize}
-Pokiaľ sa plast stal odpadom prejde do jedného z nasledujúcich stavov:
-\begin{itemize}
-	\item pravdepodobnosť 5\% - Stáva sa cigaretovým ohorkom poprípade iným drobným odpadom. Odpad sa stáva rozloženým za 5-10 rokov - opúsťa systém.
-	\item pravdepodobnosť 0,4\% - Stáva sa slamkou. Odpad sa stáva rozloženým za exponenciálne 200 rokov - opúsťa systém.
-	\item pravdepodobnosť 75\% - Stáva sa o PET fľašou/vrchnákom poprípade plastovým obalom/vrchnákom. Odpad sa stáva rozloženým za exponenciálne 450 rokov - opúsťa systém.
-	\item pravdepodobnosť 16\% - Stáva sa taškou poripáde plastovým vreckom či fóliou. Odpad sa stáva rozloženým za exponenciálne 20 rokov - opúsťa systém.
-	\item pravdepodobnosť 3,6\% - Stáva sa penovým "take away" obalom na jedlo. Odpad sa stáva rozloženým za exponenciálne 50 rokov - opúšťa systém.
-\end{itemize}
-Pokiaľ sa plast pošle na recykláciu prejde do jedného z nasledujúcich stavov::
-\begin{itemize}
-	\item pravdepodobnosť 20\% - Plast sa spáli a stáva sa rozloženým - opúšťa systém.
-	\item pravdepodobnosť 20\% - Plast sa znovu použije a posiela sa na vstup systému.
-	\item pravdepodobnosť 60\% - Plast sa stáva odpadom a môže ďalej prejsť do 5 stavov.
-\end{itemize}
-
-\subsection{Forma konceptuálneho modelu}
-
-Model je vyjadrený formou Petriho siete - príloha \ref{appendix:petri_net}.
-
-%##########################################################################%
-%##########################################################################%
-\section{Architektúra simulačného modelu/simulátoru}
-\label{architecture:uvod}
-Hlavnými komponentami implementačnej časti projektu sú triedy \texttt{Production}
-a \texttt{Plastic}. Trieda \texttt{Production} dedí od tiedy \texttt{Event} \cite{SIMLIB}
-a stará sa o generovanie a aktiváciu procesov ktoré spracovávame. Životný cyklus
-týchto procesov je popísaný v triede \texttt{Plastic}. Program takisto obsahuje triedu
-\texttt{ArgumentParser}, ktorá sa stará o spracovanie argumentov programu.
-
-\subsection{Mapovanie konceptuálneho modelu do simulačného modelu}
-Ako už bolo spomenuté v úvode kapitoly \ref{architecture:uvod} o generovanie procesov
-vstupujúcich do systému sa stará trieda \texttt{Production}. Jeden tento proces predstavuje
-jeden milión ton plastu. Po vygrenerovaní je proces rozdelený do jednej zo 4 vetiev, ktoré
-predstavujú stavy popísané v modeli \ref{appendix:petri_net} (recyklovaný,skládka...). Rozdelenie
-je vo forme intervalov, ktoré zodpovedajú percentám v modeli. O náhodnosť rozdelenia sa stará
-funkcia \texttt{Random()} \cite{SIMLIB}. Po tom čo prejde proces do tohto stavu, inkrementuje sa celočíselná premenná
-ktorá predstavu množstvo plastu v danom stave. Ak prejde proces do stavu recyklácie je následne
-opäť náhodne rozdelení do stavov podľa rozdelenia v modeli. Procesy ktoré sa dostali do stavu skládka
-sú takisto rozdelené a podľa kategórie, do ktorej spadajú im je nastavené čakanie funkciou \texttt{Wait()} \cite{SIMLIB}.
-Ak takýto čakajúci proces stihne skončiť pred skončením simulácie považujeme ho za rozložený.
-
-\subsection{Spustenie simulačného modelu, parametre programu}
-Simulačný model je nutné pred spustením preložiť príkazom make alebo make run (tento príkaz po preklade spustí program). Simulačný model je možné spustiť ako bez parametrov, tak s nimi, a to v ľubovoľnom poradí. Ak užívateľ nezadá parametre, je program spustený s prednastavenými parametrami.
-
-\subsubsection{Popis parametrov programu}
-\begin{itemize}
-	\item \texttt{-y}\quad Počet rokov simulácie [Prednastavená hodnota: 10 rokov]
-	\item \texttt{-r}\quad Percento recyklovaných plastov. Maximálna percentuálna hodnota je nastavená na 62\%, pretože recyklácia sa netýka plastu ktorý je znovapoužitý a spálený. [Prednastavená hodnota: 6 (viz \ref{appendix:petri_net})]
-	\item \texttt{-s}\quad Percento úspešne zrecyklovaných plastov(znovupoužitých). Maximálna hodnota je nastavená na 80\% pretože 20\% z recyklovaných plasov sa spáli [Prednastavená hodnota: 20 (viz \ref{appendix:petri_net})]
-	\item \texttt{-i}\quad Percentuálny ročný nárast produkcie plastov [Prednastavená hodnota: 0]
-\end{itemize}
-
-
-%##########################################################################%
-%##########################################################################%
-\section{Podstata simulačných experimentov a ich priebeh}
-Cieľom experimentov bolo overiť verejne dostupné informácie o problamatike plastového odpadu vo svete a navrhnúť vhodný a zrealizovateľný plán ako zastaviť nadmerné znečistenie našej planéty. Experimenty 2 - sekcia \ref{label:exp2} a 3 - sekcia \ref{label:exp3} a zameriavajú na otázku, či je vhodnejšie zvýšiť percento recyklovaného odpadu alebo kvalitu recyklácie.
-
-\subsection{Experimenty}
-
-\subsubsection{Experiment 1}
-\label{label:exp1}
-Cieľom prvého experimentu bolo overiť verejne dostupné informácie zo stránky \textbf{National Geographic} \cite{plastic_recyclation_NATGEO}. Na tejto stránke je uvedené že ak sa bude produkcia plastov naďalej zvyšovať tempom akým sa zvyšuje, v roku 2050 bude na zemi okolo 12000 miliónov ton plastového odpadu. Podľa zdroja \cite{RCOU} bolo v roku 2018 recyklovaných 25 \% plastového odpadu, preto sme nastavili paramter -r na 25. Takisto predpokladáme že úspešnosť recyklácie je aspoň 30\%.Nárast produkcie plastov sa odhaduje na 3.6\% takže parameter -i sme nastavili na 3.6. V článku National Geographic \cite{plastic_recyclation_NATGEO} je takisto spomenuté, že z 6300 milionov ton vyprodukovanych ludstvom do teraz, sa 79 percent uložilo na skládky alebo sa povaľuje voĺne v prírode. Preto sme pred spustením každého experimentu nastavili počiatočnú hodnotu znečistenia na 5000Mton.
-\texttt{./ims-projekt -y 50 -r 25 -i 3.6 -s 30}.
-
-\begin{table}[ht]
-	\centering
-	\begin{tabular}{|l|l|l|l|}
-		\hline
-		\multicolumn{2}{|l|}{\textbf{Total produced}}    & 18842                & 100\%    \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Reused}}            & 7088                 & 38\%     \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Waste}}             & 9352                 & 49\%     \\ \hline
-		                                                 & \textit{Decomposed}  & 1313   & \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Incinerated}}       & 2401                 & 13\%     \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Recycled}}          & 4745                 & (20\%)   \\ \hline
-		                                                 & \textit{Reused}      & 1444   & \\ \hline
-		                                                 & \textit{Incinerated} & 932    & \\ \hline
-		                                                 & \textit{Wasted}      & 2368   & \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Total world waste}} & 13038 milion tons    &          \\ \hline
-	\end{tabular}
-	\caption{Výsledok experimentu 1}
-	\label{tab:2}
-\end{table}
-
-Ako možno vidieť v tabuľke \ref{tab:2}, simulátor vrátil číslo 13038 čo sa takmer zhoduje s údajom v spomínanom článku. Týmto experimentom sme zároveň testovali validitu modelu, pretože v prvých verziách nám simulačný model vracal hodnotu o 5000 väčšiu čím sme odhalili jeho vadu.
-
+% ---------------------------------------------------------------------------- %
+% ---------------------------------------------------------------------------- %
+% ---------------------------------------------------------------------------- %
 \pagebreak
-\subsubsection{Experiment 2}
-\label{label:exp2}
-Cieľom druhého experimnetu bolo zistiť, či je pri snahe o zredukovanie plastového
-odpadu výhodnejšie sa zamerať na vyššiu mieru recyklácie odpadu alebo skôr
-zefektívniť recykláciu odpadu. Budeme simulovať časový úsek 10 rokov.
+\section{Návrh aplikácie}
 
-Spustenie simulácie s maximálnou mierou recyklácie odpadu -r 62\%: \texttt{./ims-projekt -r 62}.
+Aplikácia je navrhnutá tak, že prostredníctvom protokolu HTTP komunikuje s Discord \cite{discord} API \cite{discord_docs}. Pre komunikáciu s Discord \cite{discord} API \cite{discord_docs} je nutné použiť šifrované SSL spojenie, ktoré je vytvorené pomocou knižnice \textbf{OpenSSL} \cite{OpenSSL_docs}. Komunikácia je realizovaní pomocou knižnice \textbf{BSD sockets} \cite{BSD_sockets}. Aplikácia beží až kým nezachytí signál \texttt{SIGINT} a potom je korektne ukončená.
 
-\begin{table}[ht]
-	\centering
-	\begin{tabular}{|l|l|l|l|}
-		\hline
-		\multicolumn{2}{|l|}{\textbf{Total produced}}    & 3590                 & 100\%    \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Reused}}            & 1539                 & 43\%     \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Waste}}             & 1342                 & 37\%     \\ \hline
-		                                                 & \textit{Decomposed}  & 82     & \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Incinerated}}       & 708                  & 20\%     \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Recycled}}          & 2230                 & (62\%)   \\ \hline
-		                                                 & \textit{Reused}      & 461    & \\ \hline
-		                                                 & \textit{Incinerated} & 426    & \\ \hline
-		                                                 & \textit{Wasted}      & 1342   & \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Total world waste}} & 6259  milion tons    &          \\ \hline
-	\end{tabular}
-	\caption{Experiment 2 - maximálna miera recyklácie}
-	\label{tab:3}
-\end{table}
+Aplikácia je navrhnutá tak, aby bola schopná bežať čo najdlhšiu možnú dobu a to vďaka tomu, že je schopná pri prerušení alebo inom násilnom ukončení SSL spojenia toto spojenie automaticky reštartovať a fungovať ďalej bez prerušenia (detaily bližšie popísané v kapitole \ref{3:uvod}.) Aplikácia dokáže takisto fungovať ďalej ak dostane ako odpoveď na HTTP požiadavok chybový kód \texttt{HTTP/1.1 500 Internal Server Error} (detaily v kapitole \ref{3:uvod}).
 
-Spustenie simulácie s mierou recyklácie odpadu -r 20\% a s maximálnou efektivitou recyklácie -s 100: \texttt{./ims-projekt -r 20 -s 100}.
+Podľa zadania projektu nie je špecifikované, v koľkých serveroch vytvorených na platforme Discord \cite{discord} môže byť "bot" účet, na ktorý sa aplikácia pripája,  autorizovaný. Moja aplikácia je teda navrhnutá tak, že akceptuje len také "bot" účty, ktoré sú autorizované presne v jednom Discord \cite{discord} servere.
 
-\begin{table}[ht]
-	\centering
-	\begin{tabular}{|l|l|l|l|}
-		\hline
-		\multicolumn{2}{|l|}{\textbf{Total produced}}    & 3590                 & 100\%    \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Reused}}            & 1650                 & 46\%     \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Waste}}             & 1527                 & 42\%     \\ \hline
-		                                                 & \textit{Decomposed}  & 89     & \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Incinerated}}       & 413                  & 12\%     \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Recycled}}          & 705                  & (20\%)   \\ \hline
-		                                                 & \textit{Reused}      & 573    & \\ \hline
-		                                                 & \textit{Incinerated} & 132    & \\ \hline
-		                                                 & \textit{Wasted}      & 0      & \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Total world waste}} & 6438  milion tons    &          \\ \hline
-	\end{tabular}
-	\caption{Experiment 2 - maximálna efektivita recyklácie}
-	\label{tab:4}
-\end{table}
+Podobne je to z textovým kanálom \texttt{isa-bot}. Takisto nie je špecifikované koľko kanálov s týmto menom môže byť vytvorených v jednom Discord \cite{discord} servere. Aplikácia akceptuje servery s presne jedným takto nazvaným kanálom.
 
-Ako možno vidieť v tabuľkách \ref{tab:3} a \ref{tab:4}, simulátor vrátil v tabuľke \ref{tab:3} číslo 6259 a v tabuľke \ref{tab:4} číslo 6438.
-V prípade časového úseku 10 rokov sa viacej oplatí zamerať sa na maximálnu efektivitu recyklácie odpadu.
+\subsection{Použité technológie}
 
+Boli použité štandardné knižnice jazyka C a C++, knižnice pre prácu s funkciami bežne používanými v sieťovom prostredí (ako je netinet/*, sys/*, arpa/*, openssl/* \dots), knižnica \textbf{OpenSSL} \cite{OpenSSL_docs}, knižnica \textbf{BSD sockets} \cite{BSD_sockets}, GNU knižnica \textbf{getopt.h} \cite{getopt} na spracovanie ("dlhých") argumentov, knižnica \textbf{poll.h} \cite{poll_man_page} (detaily v kapitole \ref{3:uvod}) a knižnica \textbf{signal.h} \cite{signal} zachytávanie a spracovanie signálu \texttt{SIGINT}. Ako nástroj pre automatizáciu prekladu bol použitý \textbf{GNU Make} \cite{make}.
+
+% ---------------------------------------------------------------------------- %
+% ---------------------------------------------------------------------------- %
+% ---------------------------------------------------------------------------- %
 \pagebreak
-\subsubsection{Experiment 3}
-\label{label:exp3}
-Cieľom tretieho experimentu bude overiť čo sa stane ak si zopakujeme experiment číslo 2,
-ale budeme simulovať časový úsek 100 rokov.
+\section{Popis implementácie}
+\label{3:uvod}
 
-Spustenie simulácie s maximálnou mierou recyklácie odpadu -r 62\% a časovým úsekom -y 100 rokov: \texttt{./ims-projekt -r 62 -y 100}.
 
-\begin{table}[ht]
-	\centering
-	\begin{tabular}{|l|l|l|l|}
-		\hline
-		\multicolumn{2}{|l|}{\textbf{Total produced}}    & 35900                & 100\%    \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Reused}}            & 15389                & 43\%     \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Waste}}             & 13272                & 37\%     \\ \hline
-		                                                 & \textit{Decomposed}  & 3592   & \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Incinerated}}       & 7238                 & 20\%     \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Recycled}}          & 22177                & (62\%)   \\ \hline
-		                                                 & \textit{Reused}      & 4522   & \\ \hline
-		                                                 & \textit{Incinerated} & 4380   & \\ \hline
-		                                                 & \textit{Wasted}      & 13272  & \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Total world waste}} & 14679 milion tons    &          \\ \hline
-	\end{tabular}
-	\caption{Experiment 3 - maximálna miera recyklácie, 100 rokov}
-	\label{tab:5}
-\end{table}
 
-Spustenie simulácie s mierou recyklácie odpadu -r 20\%, s maximálnou efektivitou recyklácie -s 100 a časovým úsekom -y 100 rokov: \texttt{./ims-projekt -r 20 -s 100 -y 100}.
+% \begin{table}[ht]
+% 	\centering
+% 	\begin{tabular}{llllll}
+% 		\textbf{}                          & \textbf{MNOŽSTVO}                  & \textbf{\begin{tabular}[c]{@{}l@{}}KUSOVÁ\\ HMOTNOSŤ\end{tabular}} & \textbf{\begin{tabular}[c]{@{}l@{}}CELKOVÁ\\ HMOTNOSŤ\end{tabular}} & \textbf{\begin{tabular}[c]{@{}l@{}}DOBA\\ ROZKLADU\end{tabular}} & \textbf{KATEGÓRIA} \\ \hline
+% 		\textbf{\begin{tabular}[c]{@{}l@{}}cigaretový ohorok/\\ drobný odpad\end{tabular}} & 2412151                            & 1,4 g                              & 3377 kg                            & 5-10 rokov                         & A                  \\ \hline
+% 		\textbf{slamka}                    & 643562                             & 0,42 g                             & 270 kg                             & 200 rokov                          & B                  \\ \hline
+% 		\textbf{PET fľaša}                 & 1569135                            & 30 g                               & 47074 kg                           & 450 rokov                          & \multirow{4}{*}{C} \\
+% 		\textbf{PET vrchnák}               & 1091107                            & 2 g                                & 2182 kg                            & 450 rokov                          &                    \\
+% 		\textbf{plastový vrchnák}          & 624878                             & 3 g                                & 1874 kg                            & 450 rokov                          &                    \\
+% 		\textbf{\begin{tabular}[c]{@{}l@{}}"take away"\\ box z plastu\end{tabular}} & 632874                             & 4,5 g                              & 2848 kg                            & 450 rokov                          &                    \\ \hline
+% 		\textbf{igelitová taška}           & 757523                             & 5,5 g                              & 4166 kg                            & 20 rokov                           & \multirow{3}{*}{D} \\
+% 		\textbf{plastové vrece}            & 746211                             & 5,5 g                              & 4104 kg                            & 20 rokov                           &                    \\
+% 		\textbf{fólia/drobný obal}         & 1739743                            & 2 g                                & 3479 kg                            & 20 rokov                           &                    \\ \hline
+% 		\textbf{\begin{tabular}[c]{@{}l@{}}"take away"\\ box z peny\end{tabular}} & 580570                             & 4,5 g                              & 2612 kg                            & 50-80 rokov                        & E                  \\
+% 		\multicolumn{3}{r}{{\ul SPOLU:}}   & \multicolumn{3}{l}{{\ul 71986 kg}}
+% 	\end{tabular}
+% 	\caption{Tabuľka top 10 nájdených predmetov a výsledky meraní}
+% 	\label{tab:1}
+% \end{table}
 
-\begin{table}[ht]
-	\centering
-	\begin{tabular}{|l|l|l|l|}
-		\hline
-		\multicolumn{2}{|l|}{\textbf{Total produced}}    & 35900                & 100\%    \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Reused}}            & 16370                & 46\%     \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Waste}}             & 15212                & 42\%     \\ \hline
-		                                                 & \textit{Decomposed}  & 4130   & \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Incinerated}}       & 4317                 & 12\%     \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Recycled}}          & 7222                 & (20\%)   \\ \hline
-		                                                 & \textit{Reused}      & 5760   & \\ \hline
-		                                                 & \textit{Incinerated} & 1463   & \\ \hline
-		                                                 & \textit{Wasted}      & 0      & \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Total world waste}} & 16081 milion tons    &          \\ \hline
-	\end{tabular}
-	\caption{Experiment 3 - maximálna efektivita recyklácie, 100 rokov}
-	\label{tab:6}
-\end{table}
-
-Ako možno vidieť v tabuľkách \ref{tab:5} a \ref{tab:6}, simulátor vrátil v tabuľke \ref{tab:5} číslo 14679 a v tabuľke \ref{tab:6} číslo 16081.
-V prípade časového úseku 100 rokov sa taktiež viacej oplatí zamerať sa na maximálnu efektivitu recyklácie odpadu a môžme vidieť že čísla, ktoré vrátil simulátor v tomto experimente sa k sebe nepriblížili, naopak sa od seba viacej vzdialil.
-Z tohoto môžme vyvodiť záver, že sa do budúcnosti oplatí zamerať na maximálnu mieru recyklácie odpadu.
-
+% ---------------------------------------------------------------------------- %
+% ---------------------------------------------------------------------------- %
+% ---------------------------------------------------------------------------- %
 \pagebreak
-\subsubsection{Experiment 4}
-\label{label:exp4}
-V tomto experimente sme sa zamerali na to, aký veľký rozdiel spraví 3,6 percentný ročný nárast a úbytok v produkcií plastov. Experimentovali sme s 3 prípadmi. Ako bude situácia vyzerať ak bude produkcia každoročne narastať, klesať a stagnovať. Ako testovacie obdobie sme si zvolili 50 rokov a zvyšné parametre sme nastavili podľa experimentu 1 - sekcia \ref{label:exp1}. Menili sme len parameter -i \{ -3.6, 1.0, 3.6 \}.
-
-\begin{table}[ht]
-	\centering
-	\begin{tabular}{|l|l|l|l|}
-		\hline
-		\multicolumn{2}{|l|}{\textbf{Total produced}}    & 48479                & 100\%    \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Reused}}            & 18167                & 37\%     \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Waste}}             & 24014                & 50\%     \\ \hline
-		                                                 & \textit{Decomposed}  & 4577   & \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Incinerated}}       & 6297                 & 13\%     \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Recycled}}          & 12153                & (25\%)   \\ \hline
-		                                                 & \textit{Reused}      & 3640   & \\ \hline
-		                                                 & \textit{Incinerated} & 2417   & \\ \hline
-		                                                 & \textit{Wasted}      & 6095   & \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Total world waste}} & 24436 milion tons    &          \\ \hline
-	\end{tabular}
-	\caption{Výsledok experimentu s rastúcou produkciou}
-	\label{tab:7}
-\end{table}
-
-\begin{table}[ht]
-	\centering
-	\begin{tabular}{|l|l|l|l|}
-		\hline
-		\multicolumn{2}{|l|}{\textbf{Total produced}}    & 8378                 & 100\%    \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Reused}}            & 3139                 & 37\%     \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Waste}}             & 4150                 & 50\%     \\ \hline
-		                                                 & \textit{Decomposed}  & 791    & \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Incinerated}}       & 1088                 & 13\%     \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Recycled}}          & 2100                 & (25\%)   \\ \hline
-		                                                 & \textit{Reused}      & 629    & \\ \hline
-		                                                 & \textit{Incinerated} & 417    & \\ \hline
-		                                                 & \textit{Wasted}      & 1053   & \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Total world waste}} & 8358 milion tons     &          \\ \hline
-	\end{tabular}
-	\caption{Výsledok experimentu s klesajúcou produkciou}
-	\label{tab:8}
-\end{table}
-
-\begin{table}[ht]
-	\centering
-	\begin{tabular}{|l|l|l|l|}
-		\hline
-		\multicolumn{2}{|l|}{\textbf{Total produced}}    & 17951                & 100\%    \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Reused}}            & 6726                 & 37\%     \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Waste}}             & 8892                 & 50\%     \\ \hline
-		                                                 & \textit{Decomposed}  & 1695   & \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Incinerated}}       & 2332                 & 13\%     \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Recycled}}          & 4500                 & (25\%)   \\ \hline
-		                                                 & \textit{Reused}      & 1348   & \\ \hline
-		                                                 & \textit{Incinerated} & 894    & \\ \hline
-		                                                 & \textit{Wasted}      & 2257   & \\ \hline
-		\multicolumn{2}{|l|}{\textbf{Total world waste}} & 12196 milion tons    &          \\ \hline
-	\end{tabular}
-	\caption{Výsledok experimentu so stagnujúcou produkciou}
-	\label{tab:9}
-\end{table}
-
-Ako môžme vidieť, v experimente kde sme ponechali nárast produkcie 3.6\% - tabuľka \ref{tab:7} je celkový odpad 3krát väčší ako v experimente kde sme znižovali produkciu - tabuľka \ref{tab:8} a 2krát väčší ako v experimente so stagnajúcou produkciou - tabuľka \ref{tab:9}. Zisťujeme, že ak by sme udržali produkciu na leveli akom je momentálne ušetrili by sme 12000 miliónov ton plastového odpadu.
-
-%##########################################################################%
-%##########################################################################%
-\section{Zhrnutie simulačných experimentov a záver}
-Z výsledkov experimentu 1 - sekcia \ref{label:exp1} vyplýva, že náš model je valídny a vracia výsledky odpovedajúce realite.
-Z experimentu 2 - sekcia \ref{label:exp2} a experimentu 3 - sekcia \ref{label:exp3} vyplýva, že na vyriešenie problému s plastovým odpadom bude dôležité maximalizovať mieru recyklácie
-a taktiež z experimentu 4 - sekcia \ref{label:exp4} vyplýva, že bude nutné zastaviť ročné zvyšovanie produkcie plastov.
-
-V rámci projektu vznikol nástroj, ktorý realisticky modeluje kritickú situáciu s prebytkom plastového odpadu
-na našej planéte. Tento nástroj bol implementovaný v jazyku C++ s použitím knižnice SIMLIB \cite{SIMLIB}.
-Systém je možné spustiť s rôznymi argumentami a tým pádom vykonávať rôzne experimenty, ktorých výsledky
-sú vracané vo formáte prehľadných tabuliek.
+\section{Základné informácie o programe}
+\label{4:uvod}
 
 
-%##########################################################################%
-% CITATIONS
-%##########################################################################%
+
+% ---------------------------------------------------------------------------- %
+% ---------------------------------------------------------------------------- %
+% ---------------------------------------------------------------------------- %
+\pagebreak
+\section{Návod na použitie}
+
+Preloženie programu sa vykoná príkazom \texttt{make}.
+
+Spustenie programu: \texttt{./isabot [-h|--help] [-v|--verbose] -t <access\_token>}
+
+Popis argumentov:
+\begin{itemize}
+	\item \texttt{-h|--help} \quad Program vypíše nápovedu na STDOUT a korektne skončí.
+	\item \texttt{-t <access\_token>} \quad Token existujúceho "bot" účtu, na ktorý sa program pripojí. Účet musí byť autorizovaný presne v jednom Discord \cite{discord} servere.
+	\item \texttt{-v|--verbose} \quad Program vypíše správy, na ktoré reaguje, na STDOUT vo formáte \texttt{<channel> - <username>: <message>}.
+\end{itemize}
+
+Ak nebol použitý žiadny argument, tak program vypíše nápovedu na STDOUT a korektne skončí.
+
+% ---------------------------------------------------------------------------- %
+%                                   CITATIONS                                  %
+% ---------------------------------------------------------------------------- %
 \clearpage
 \bibliographystyle{czechiso}
 \renewcommand{\refname}{Literatúra}
 \bibliography{manual}
 
-
-
-%##########################################################################%
-% ADDITIONS
-%##########################################################################%
-\clearpage
-\appendix
-
-
-% \section{Petriho sieť}
-% \label{appendix:petri_net}
-
-% \begin{figure}[ht]
-% 	\centering
-% 	\includegraphics[width=1 \linewidth]{IMSpetri.pdf}
-
-% 	\caption{Petriho sieť}
-% \end{figure}
 \end{document}
