@@ -77,30 +77,30 @@ int PrintHelp();
 int OpenConnection(int* sock, const char* hostname, int port, time_t sec, time_t usec);
 
 /**
- * TODO
+ * This function initializes the SSL library, creates a new SSL_CTX object, calls the function OpenConnection(), creates a new SSL structure and performs SSL connection.
  *
- * @param ctx
+ * @param ctx pointer to pointer to SSL_CTX object
  * @param sock pointer to the socket decriptor
- * @param ssl
+ * @param ssl pointer to pointer to SSL structure
  * @returns EXIT_SUCCESS on success or EXIT_FAILURE if an error occured
  */
 int Startup(SSL_CTX** ctx, int* sock, SSL** ssl);
 
 /**
- * TODO
+ * This procedure performs cleanup of memory which has been used by SSL library and also closes the socket where "sock" points.
  *
- * @param ctx
+ * @param ctx pointer to pointer to SSL_CTX object
  * @param sock pointer to the socket descriptor
- * @param ssl
+ * @param ssl pointer to pointer to SSL structure
  */
 void Cleanup(SSL_CTX** ctx, int* sock, SSL** ssl);
 
 /**
  * This function performs restart of SSL connection by calling procedure Cleanup() and then function Startup().
  *
- * @param ctx
+ * @param ctx pointer to pointer to SSL_CTX object
  * @param sock pointer to the socket decriptor
- * @param ssl
+ * @param ssl pointer to pointer to SSL structure
  * @returns exit code of function Startup()
  */
 int Restart(SSL_CTX** ctx, int* sock, SSL** ssl);

@@ -96,26 +96,6 @@ Boli použité štandardné knižnice jazyka C a C++, knižnice pre prácu s fun
 
 
 
-% \begin{table}[ht]
-% 	\centering
-% 	\begin{tabular}{llllll}
-% 		\textbf{}                          & \textbf{MNOŽSTVO}                  & \textbf{\begin{tabular}[c]{@{}l@{}}KUSOVÁ\\ HMOTNOSŤ\end{tabular}} & \textbf{\begin{tabular}[c]{@{}l@{}}CELKOVÁ\\ HMOTNOSŤ\end{tabular}} & \textbf{\begin{tabular}[c]{@{}l@{}}DOBA\\ ROZKLADU\end{tabular}} & \textbf{KATEGÓRIA} \\ \hline
-% 		\textbf{\begin{tabular}[c]{@{}l@{}}cigaretový ohorok/\\ drobný odpad\end{tabular}} & 2412151                            & 1,4 g                              & 3377 kg                            & 5-10 rokov                         & A                  \\ \hline
-% 		\textbf{slamka}                    & 643562                             & 0,42 g                             & 270 kg                             & 200 rokov                          & B                  \\ \hline
-% 		\textbf{PET fľaša}                 & 1569135                            & 30 g                               & 47074 kg                           & 450 rokov                          & \multirow{4}{*}{C} \\
-% 		\textbf{PET vrchnák}               & 1091107                            & 2 g                                & 2182 kg                            & 450 rokov                          &                    \\
-% 		\textbf{plastový vrchnák}          & 624878                             & 3 g                                & 1874 kg                            & 450 rokov                          &                    \\
-% 		\textbf{\begin{tabular}[c]{@{}l@{}}"take away"\\ box z plastu\end{tabular}} & 632874                             & 4,5 g                              & 2848 kg                            & 450 rokov                          &                    \\ \hline
-% 		\textbf{igelitová taška}           & 757523                             & 5,5 g                              & 4166 kg                            & 20 rokov                           & \multirow{3}{*}{D} \\
-% 		\textbf{plastové vrece}            & 746211                             & 5,5 g                              & 4104 kg                            & 20 rokov                           &                    \\
-% 		\textbf{fólia/drobný obal}         & 1739743                            & 2 g                                & 3479 kg                            & 20 rokov                           &                    \\ \hline
-% 		\textbf{\begin{tabular}[c]{@{}l@{}}"take away"\\ box z peny\end{tabular}} & 580570                             & 4,5 g                              & 2612 kg                            & 50-80 rokov                        & E                  \\
-% 		\multicolumn{3}{r}{{\ul SPOLU:}}   & \multicolumn{3}{l}{{\ul 71986 kg}}
-% 	\end{tabular}
-% 	\caption{Tabuľka top 10 nájdených predmetov a výsledky meraní}
-% 	\label{tab:1}
-% \end{table}
-
 % ---------------------------------------------------------------------------- %
 % ---------------------------------------------------------------------------- %
 % ---------------------------------------------------------------------------- %
@@ -136,13 +116,17 @@ Preloženie programu sa vykoná príkazom \texttt{make}.
 Spustenie programu: \texttt{./isabot [-h|--help] [-v|--verbose] -t <access\_token>}
 
 Popis argumentov:
-\begin{itemize}
-	\item \texttt{-h|--help} \quad Program vypíše nápovedu na STDOUT a korektne skončí.
-	\item \texttt{-t <access\_token>} \quad Token existujúceho "bot" účtu, na ktorý sa program pripojí. Účet musí byť autorizovaný presne v jednom Discord \cite{discord} servere.
-	\item \texttt{-v|--verbose} \quad Program vypíše správy, na ktoré reaguje, na STDOUT vo formáte \texttt{<channel> - <username>: <message>}.
-\end{itemize}
 
-Ak nebol použitý žiadny argument, tak program vypíše nápovedu na STDOUT a korektne skončí.
+\begin{tabular}{ll}
+	\texttt{-h|--help}          & Program vypíše nápovedu na STDOUT a skončí.                                         \\
+	\texttt{-t <access\_token>} & Token existujúceho "bot" účtu, na ktorý sa program pripojí.                         \\
+	                            & Účet musí byť autorizovaný presne v jednom Discord \cite{discord} servere.          \\
+	\texttt{-v|--verbose}       & Program vypíše správy, ktoré zachytil v textovom kanále \texttt{isa-bot}            \\
+	                            & (a sú od iných užívateľov, ktorí nemajú reťazec "bot" vo svojom užívateľskom mene), \\
+	                            & na STDOUT vo formáte: \texttt{<channel> - <username>: <message>}.
+\end{tabular}
+
+Ak nebol použitý žiadny argument, tak program vypíše nápovedu na STDOUT a skončí.
 
 % ---------------------------------------------------------------------------- %
 %                                   CITATIONS                                  %
