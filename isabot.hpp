@@ -106,11 +106,11 @@ void Cleanup(SSL_CTX** ctx, int* sock, SSL** ssl);
 int Restart(SSL_CTX** ctx, int* sock, SSL** ssl);
 
 /**
- * This function tries to read data from a TLS/SSL connection. It actually calls the function SSL_read(), which reads the data into a buffer and these data are continuously copied into the string where "received" points. The function SSL_read() is called in read loop until some of these events happen...1) Connection was closed or fatal error has occured => restart of SSL connection is performed by calling function Restart(); 2) No more data can be read right now. After the read loop has been broken poll() is used on the underlying socket to ensure that all data has been read. The content of the string where the "received" points is always errased and then filled with new content. After the function finishes, the content of the string where "received" points can contain received data, but it depends and it can be determined by return code => EXIT_SERVER_ERROR means that the string where the "received" points does NOT contain valid received data and other return codes mean otherwise.
+ * This function tries to read data from a TLS/SSL connection. It actually calls the function SSL_read(), which reads the data into a buffer and these data are continuously concatenated into the string where "received" points. The function SSL_read() is called in read loop until some of these events happen...1) Connection was closed or fatal error has occured => restart of SSL connection is performed by calling function Restart(); 2) No more data can be read right now. After the read loop has been broken, function poll() is used on the underlying socket to ensure that all data has been read. The content of the string where the "received" points is always errased and then filled with new content. After the function finishes, the content of the string where "received" points can contain received data, but it depends and it can be determined by return code => EXIT_SERVER_ERROR means that the string where the "received" points does NOT contain valid received data BUT program doesn't need to be interrupted; EXIT_FAILURE means the same AND program must be interrupted; EXIT_SUCCESS - valid data has been received.
  *
- * @param ctx
+ * @param ctx pointer to pointer to SSL_CTX object
  * @param sock pointer to the socket descriptor
- * @param ssl
+ * @param ssl pointer to pointer to SSL structure
  * @param received pointer to received string - data which has been read are copied from buffer to the memory where "received" points
  * @returns EXIT_SUCCESS on success, EXIT_FAILURE on failure, EXIT_SERVER_ERROR if internal server error has occurred => string where the "received" points does NOT contain valid received data
  */

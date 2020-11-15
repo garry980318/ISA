@@ -65,7 +65,7 @@
 
 \section{Uvedenie do problematiky}
 
-Cieľom tohto projektu je vytvoriť prenositeľnú konzolovú aplikáciu, ktorá pomocou existujúceho "bot" účtu posiela echo odozvy na všetky správy, ktoré zaznamená v textovom kanáli \texttt{isa-bot}. Spomínaný "bot" účet, musí byť vytvorený na platforme Discord \cite{discord} a musí byť autorizovaný v nejakom servere, ktorý je takisto vytvorený na platforme Discord \cite{discord}. Postup vytvorenia a autorizovania "bot" účtu je popísaný na tejto adrese \cite{creating_a_bot}.
+Cieľom tohto projektu je vytvoriť prenositeľnú konzolovú aplikáciu, ktorá pomocou existujúceho "bot" účtu posiela echo odozvy na všetky správy, ktoré zaznamená v textovom kanáli \texttt{isa-bot}. Spomínaný "bot" účet, musí byť vytvorený na platforme Discord \cite{discord} a musí byť autorizovaný v nejakom servere, ktorý je takisto vytvorený na platforme Discord \cite{discord}. Postup vytvorenia a autorizovania "bot" účtu je popísaný na tejto adrese~\cite{creating_a_bot}. Detaily k nastaveniu "bot" účtu sú popísané v kapitole \ref{4:1}.
 
 Aplikácia posiela echo odozvy na všetky správy, ktoré nie sú poslané ňou samou, alebo nie sú poslané iným botom (botom sa rozumie užívateľ, ktorého užívateľské meno obsahuje reťazec "bot"). Echo odozvy sú posielané v tvare: \texttt{echo: <username> - <message>}.
 
@@ -77,33 +77,104 @@ Aplikácia posiela echo odozvy na všetky správy, ktoré nie sú poslané ňou 
 
 Aplikácia je navrhnutá tak, že prostredníctvom protokolu HTTP komunikuje s Discord \cite{discord} API \cite{discord_docs}. Pre komunikáciu s Discord \cite{discord} API \cite{discord_docs} je nutné použiť šifrované SSL spojenie, ktoré je vytvorené pomocou knižnice \textbf{OpenSSL} \cite{OpenSSL_docs}. Komunikácia je realizovaní pomocou knižnice \textbf{BSD sockets} \cite{BSD_sockets}. Aplikácia beží až kým nezachytí signál \texttt{SIGINT} a potom je korektne ukončená.
 
-Aplikácia je navrhnutá tak, aby bola schopná bežať čo najdlhšiu možnú dobu a to vďaka tomu, že je schopná pri prerušení alebo inom násilnom ukončení SSL spojenia toto spojenie automaticky reštartovať a fungovať ďalej bez prerušenia (detaily bližšie popísané v kapitole \ref{3:uvod}.) Aplikácia dokáže takisto fungovať ďalej ak dostane ako odpoveď na HTTP požiadavok chybový kód \texttt{HTTP/1.1 500 Internal Server Error} (detaily v kapitole \ref{3:uvod}).
+Aplikácia je navrhnutá tak, aby bola schopná bežať čo najdlhšiu možnú dobu a to vďaka tomu, že je schopná pri prerušení alebo inom násilnom ukončení SSL spojenia toto spojenie automaticky reštartovať a fungovať ďalej bez prerušenia (detaily bližšie popísané v kapitole \ref{3:1}.) Aplikácia dokáže takisto fungovať ďalej ak dostane ako odpoveď na HTTP požiadavok chybový kód \texttt{HTTP/1.1 500 Internal Server Error} (detaily v kapitole \ref{3:1}).
 
 Podľa zadania projektu nie je špecifikované, v koľkých serveroch vytvorených na platforme Discord \cite{discord} môže byť "bot" účet, na ktorý sa aplikácia pripája,  autorizovaný. Moja aplikácia je teda navrhnutá tak, že akceptuje len také "bot" účty, ktoré sú autorizované presne v jednom Discord \cite{discord} servere.
 
-Podobne je to z textovým kanálom \texttt{isa-bot}. Takisto nie je špecifikované koľko kanálov s týmto menom môže byť vytvorených v jednom Discord \cite{discord} servere. Aplikácia akceptuje servery s presne jedným takto nazvaným kanálom.
+Podobne je to z textovým kanálom \texttt{isa-bot}. Takisto nie je špecifikované koľko kanálov s týmto menom môže byť vytvorených v jednom Discord \cite{discord} servere. Aplikácia akceptuje také "bot" účty, ktoré sú autorizované v servere s presne jedným takto nazvaným textovým kanálom.
 
 \subsection{Použité technológie}
 
-Boli použité štandardné knižnice jazyka C a C++, knižnice pre prácu s funkciami bežne používanými v sieťovom prostredí (ako je netinet/*, sys/*, arpa/*, openssl/* \dots), knižnica \textbf{OpenSSL} \cite{OpenSSL_docs}, knižnica \textbf{BSD sockets} \cite{BSD_sockets}, GNU knižnica \textbf{getopt.h} \cite{getopt} na spracovanie ("dlhých") argumentov, knižnica \textbf{poll.h} \cite{poll_man_page} (detaily v kapitole \ref{3:uvod}) a knižnica \textbf{signal.h} \cite{signal} zachytávanie a spracovanie signálu \texttt{SIGINT}. Ako nástroj pre automatizáciu prekladu bol použitý \textbf{GNU Make} \cite{make}.
+Boli použité štandardné knižnice jazyka C a C++, knižnice pre prácu s funkciami bežne používanými v sieťovom prostredí (ako je netinet/*, sys/*, arpa/*, \dots), knižnica \textbf{OpenSSL} \cite{OpenSSL_docs}, knižnica \textbf{BSD sockets} \cite{BSD_sockets}, GNU knižnica \textbf{getopt.h} \cite{getopt} na spracovanie ("dlhých") argumentov, knižnica \textbf{poll.h} \cite{poll_man_page} (detaily v kapitole \ref{3:1}) a knižnica \textbf{signal.h} \cite{signal} zachytávanie a spracovanie signálu \texttt{SIGINT}. Ako nástroj pre automatizáciu prekladu bol použitý \textbf{GNU Make} \cite{make}.
 
 % ---------------------------------------------------------------------------- %
 % ---------------------------------------------------------------------------- %
 % ---------------------------------------------------------------------------- %
 \pagebreak
 \section{Popis implementácie}
-\label{3:uvod}
 
+Kód som sa snažil napísať tak, aby bol zrozumiteľný a jednoducho čitateľný. Názvy premenných som zvolil tak, aby bolo z názvu jasné čo premenné obsahujú. Tam kde by mohol byť kód nezrozumiteľný alebo mätúci sú vložené objasňujúce komenty. Všetky mnou vytvorené funkcie, procedúry a makrá sú deklarované a okomentované v hlavičkovom súbore \textbf{isabot.hpp}.
 
+\subsection{Zaujímavé pasáže kódu}
+\label{3:1}
+
+Najzaujímavejšou pasážou môjho kódu je funkcia \texttt{SSLReadAnswer()}.
+
+% This function tries to read data from a TLS/SSL connection. It actually calls the function SSL_read(), which reads the data into a buffer and these data are continuously copied into the string where "received" points. The function SSL_read() is called in read loop until some of these events happen...1) Connection was closed or fatal error has occured - restart of SSL connection is performed by calling function Restart(); 2) No more data can be read right now. After the read loop has been broken poll() is used on the underlying socket to ensure that all data has been read. The content of the string where the "received" points is always errased and then filled with new content. After the function finishes, the content of the string where "received" points can contain received data, but it depends and it can be determined by return code => EXIT_SERVER_ERROR means that the string where the "received" points does NOT contain valid received data and other return codes mean otherwise.
+
+Táto funckia sa snaží prečítať dáta z TLS/SSL spojenia. Podstatou tejto funckie je cyklické volanie OpenSSL knižničnej funkcie \texttt{SSL\_read()}, ktorá číta dáta do buffra a tieto sú potom postupne konkatenované do reťazca kam ukazuje ukazateľ \texttt{received}. Funckia \texttt{SSL\_read()} je volaná v cykle, pokiaľ nenastane jeden z nasledujúcich stavov:
+\begin{enumerate}
+	\item Spojenie bolo prerušené alebo nastal fatal error - Je potrebné "reštartovať" SSL spojenie a to zavolaním funkcie \texttt{Restart()}.
+	\item Nič viac sa teraz nedá prečítať.
+\end{enumerate}
+
+Po prerušní čítacieho cyklu je potrebné zavolať funkciu \texttt{poll()} \cite{poll_man_page} (základný časový limit je 500ms) a zistiť, či sa dá ešte niečo prečítať. Pokiaľ nebolo nič prečítané, tak sa funkcia \texttt{poll()} \cite{poll_man_page} volá znovu, ale časový limit sa vždy zdvojnásobí až na maximálne 16 sekúnd. Ak sa stále nepodarilo nič prečítať, tak program končí chybou.
+
+Ako náhle je zaručené, že boli prečítané nejaké dáta z SSL spojenia, skontroluje sa, či server nevrátil chybový HTTP kód. Môže nastať jeden z nasledujúcich stavov:
+\begin{enumerate}
+	\item \texttt{HTTP/1.1 200 OK} \quad Boli prečítané valídne dáta.
+	\item \texttt{HTTP/1.1 500 Internal Server Error} \quad Nastala chyba servera, neboli prečítané valídne dáta, program však nemusí byť prerušený.
+	\item \texttt{INÉ KÓDY} \quad Neboli prečítané valídne dáta, pragram musí byť prerušený.
+\end{enumerate}
+
+Podľa nasledovných stavov funkcia vracia:
+\begin{enumerate}
+	\item \texttt{EXIT\_SUCCESS}
+	\item \texttt{EXIT\_SERVER\_ERROR}
+	\item \texttt{EXIT\_FAILURE}
+\end{enumerate}
+
+\pagebreak
+\subsection{Chybové správy}
+
+\begin{table}[ht]
+	\scriptsize
+	\begin{tabular}{lll}
+		{\ul \textbf{Error}}                                        & {\ul \textbf{Chybový kód}} & {\ul \textbf{Chybová správa}}                                               \\
+		argument '-v' deklarovaný viac ako raz                      & 420                        & bad option - option '-v' declared more than once                            \\
+		argument '-t' deklarovaný viac ako raz                      & 420                        & bad option - option '-t ' declared more than once                           \\
+		neznámy argument                                            & 420                        & Non-option arguments detected: xyz, xyz, ...                                \\
+		zlá kombinácia argumentov                                   & 420                        & bad combination of options - option '-v' can be used only with option '-t ' \\
+		nepodarilo sa vytvoriť socket                               & EXIT\_FAILURE              & socket() failed                                                             \\
+		nepodarilo sa nastaviť "receive timeout" pre socket         & EXIT\_FAILURE              & setsockopt() SO\_RCVTIMEO failed                                            \\
+		nepodarilo sa nastaviť "send timeout" pre socket            & EXIT\_FAILURE              & setsockopt() SO\_SNDTIMEO failed                                            \\
+		nepodarilo sa preložiť doménové meno na IP                  & EXIT\_FAILURE              & server IP not found                                                         \\
+		nepodarilo sa pripojiť k serveru                            & EXIT\_FAILURE              & connect() failed                                                            \\
+		nepodarilo sa vytvoriť SSL\_CTX objekt                      & EXIT\_FAILURE              & SSL\_CTX\_new() failed                                                      \\
+		nepodarilo sa vytvoriť SSL štruktúru                        & EXIT\_FAILURE              & SSL\_new() failed                                                           \\
+		funkcia SSL\_set\_fd() zlyhala                              & EXIT\_FAILURE              & SSL\_set\_fd() failed                                                       \\
+		funkcia SSL\_connect() zlyhala                              & EXIT\_FAILURE              & SSL\_connect() failed                                                       \\
+		neznámy error                                               & EXIT\_FAILURE              & UNKNOWN ERROR                                                               \\
+		nepodarila sa prečítať odpoveď na HTTP požiadavku           & EXIT\_FAILURE              & nothing has been read from server                                           \\
+		funkcia poll() zlyhala                                      & EXIT\_FAILURE              & poll() failed                                                               \\
+		funkcia poll() vrátila nečakaný "return event"              & EXIT\_FAILURE              & unexpected poll() return event                                              \\
+		zlá odpoveď na HTTP požiadavku                              & EXIT\_FAILURE              & bad answer from server                                                      \\
+		HTTP chybový kód                                            & EXIT\_FAILURE              & HTTP/1.1 ...                                                                \\
+		BOT nie je členom žiadneho serveru                          & EXIT\_FAILURE              & BOT is not member of any Discord guild                                      \\
+		BOT je členom viac ako jedného serveru                      & EXIT\_FAILURE              & BOT is member of more than one Discord guild                                \\
+		v servere neexistuje text kanál s názvom "isa-bot"          & EXIT\_FAILURE              & there is no "isa-bot" channel in this Discord guild                         \\
+		v servere existuje viac ako 1 text kanál s názvom "isa-bot" & EXIT\_FAILURE              & there is more than 1 "isa-bot" channel in this Discord guild                \\
+		funkcia SSL\_write() zlyhala                                & EXIT\_FAILURE              & SSL\_write() failed
+	\end{tabular}
+\end{table}
 
 % ---------------------------------------------------------------------------- %
 % ---------------------------------------------------------------------------- %
 % ---------------------------------------------------------------------------- %
 \pagebreak
 \section{Základné informácie o programe}
-\label{4:uvod}
 
+\subsection{Nastavenie "bot" účtu}
+\label{4:1}
 
+\begin{itemize}
+	\item Rozsahy (scopes): \quad \texttt{bot}
+	\item Práva bota (Bot permissions): \quad \texttt{View Channels, Embed Links, Read Message History, Send Messages}
+\end{itemize}
+
+\subsection{Rozšírenia}
+
+Aplikácia dokáže posielať "správne" echo odpovede na správy, ktoré obsahujú nejakú prílohu (obrázok, súbor,~...) a to tak, že zo zachytenej správy získa URL prílohy a tú potom konkatenuje ku "content" zachytenej správy a odošle echo.
 
 % ---------------------------------------------------------------------------- %
 % ---------------------------------------------------------------------------- %
@@ -113,8 +184,10 @@ Boli použité štandardné knižnice jazyka C a C++, knižnice pre prácu s fun
 
 Preloženie programu sa vykoná príkazom \texttt{make}.
 
+\noindent
 Spustenie programu: \texttt{./isabot [-h|--help] [-v|--verbose] -t <access\_token>}
 
+\noindent
 Popis argumentov:
 
 \begin{tabular}{ll}
@@ -126,7 +199,12 @@ Popis argumentov:
 	                            & na STDOUT vo formáte: \texttt{<channel> - <username>: <message>}.
 \end{tabular}
 
+\noindent
 Ak nebol použitý žiadny argument, tak program vypíše nápovedu na STDOUT a skončí.
+
+\subsection{Ukončenie programu}
+
+Program ukončí svoju činnosť, keď zachytí signál \texttt{SIGINT} (napríklad po stlačení kláves \texttt{ctrl + c}).
 
 % ---------------------------------------------------------------------------- %
 %                                   CITATIONS                                  %
